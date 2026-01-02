@@ -1,0 +1,2 @@
+# Use remote JDK 11 for building
+build --java_runtime_version=remotejdk_11
