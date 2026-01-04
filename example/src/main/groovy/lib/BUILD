@@ -1,4 +1,4 @@
-load("@io_bazel_rules_groovy//groovy:groovy.bzl", "groovy_library", "groovy_and_java_library")
+load("//groovy:groovy.bzl", "groovy_and_java_library", "groovy_library")
 
 groovy_library(
     name = "groovylib",

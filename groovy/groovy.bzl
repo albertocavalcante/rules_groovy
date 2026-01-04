@@ -98,7 +98,7 @@ _groovy_jar = rule(
             allow_files = [".jar"],
         ),
         "_groovysdk": attr.label(
-            default = Label("//external:groovy-sdk"),
+            default = Label("@groovy_sdk_artifact//:sdk"),
         ),
         "_jdk": attr.label(
             default = Label("@bazel_tools//tools/jdk:current_java_runtime"),
@@ -179,7 +179,7 @@ def groovy_binary(name, main_class, srcs = [], testonly = 0, deps = [], **kwargs
     """Rule analagous to java_binary that accepts .groovy sources instead of .java
     sources.
     """
-    all_deps = deps + ["//external:groovy"]
+    all_deps = deps + ["@groovy_sdk_artifact//:groovy"]
     if srcs:
         groovy_library(
             name = name + "-lib",
@@ -251,10 +251,10 @@ _groovy_test = rule(
         "jvm_flags": attr.string_list(),
         "deps": attr.label_list(allow_files = [".jar"]),
         "_groovysdk": attr.label(
-            default = Label("//external:groovy-sdk"),
+            default = Label("@groovy_sdk_artifact//:sdk"),
         ),
         "_implicit_deps": attr.label_list(default = [
-            Label("//external:junit"),
+            Label("@junit_artifact//jar"),
         ]),
         "_jdk": attr.label(
             default = Label("@bazel_tools//tools/jdk:current_java_runtime"),
@@ -304,8 +304,8 @@ def groovy_junit_test(
         jvm_flags = [],
         size = "small",
         tags = []):
-    groovy_lib_deps = deps + ["//external:junit"]
-    test_deps = deps + ["//external:junit"]
+    groovy_lib_deps = deps + ["@junit_artifact//jar"]
+    test_deps = deps + ["@junit_artifact//jar"]
 
     if len(tests) == 0:
         fail("Must provide at least one file in tests")
@@ -316,7 +316,7 @@ def groovy_junit_test(
             name = name + "-javalib",
             srcs = java_srcs,
             testonly = 1,
-            deps = deps + ["//external:junit"],
+            deps = deps + ["@junit_artifact//jar"],
         )
         groovy_lib_deps += [name + "-javalib"]
         test_deps += [name + "-javalib"]
@@ -354,12 +354,12 @@ def spock_test(
         size = "small",
         tags = []):
     groovy_lib_deps = deps + [
-        "//external:junit",
-        "//external:spock",
+        "@junit_artifact//jar",
+        "@spock_artifact//jar",
     ]
     test_deps = deps + [
-        "//external:junit",
-        "//external:spock",
+        "@junit_artifact//jar",
+        "@spock_artifact//jar",
     ]
 
     if len(specs) == 0:
@@ -372,8 +372,8 @@ def spock_test(
             srcs = java_srcs,
             testonly = 1,
             deps = deps + [
-                "//external:junit",
-                "//external:spock",
+                "@junit_artifact//jar",
+                "@spock_artifact//jar",
             ],
         )
         groovy_lib_deps += [name + "-javalib"]

@@ -96,10 +96,10 @@ def groovy_toolchains(
         artifact_sha256 = "4e5c788ce5bac0bda41cd066485ce84ab50e3182d81a6789b82a3e265cd85f90",
     )
 
-    # Bindings for WORKSPACE compatibility (//external:groovy-sdk, etc.)
-    # These are required for the current groovy.bzl rules which reference
-    # //external:* labels. In bzlmod mode (register=False), these bindings
-    # are not created and groovy.bzl will need to be refactored.
+    # Bindings for WORKSPACE backward compatibility (//external:groovy-sdk, etc.)
+    # These provide aliases that some external users may depend on.
+    # The core groovy.bzl rules now use canonical @repo labels directly,
+    # so these bindings are optional but kept for compatibility.
     if register:
         native.bind(name = "groovy-sdk", actual = "@groovy_sdk_artifact//:sdk")
         native.bind(name = "groovy", actual = "@groovy_sdk_artifact//:groovy")
