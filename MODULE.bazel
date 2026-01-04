@@ -1,0 +1,14 @@
+"""Groovy Rules for Bazel"""
+
+module(
+    name = "rules_groovy",
+    # Leave version unset to prevent issues with non-registry overrides.
+    # The publish workflow will set this when publishing to BCR.
+)
+
+# Minimum required version to avoid forcing dependency upgrades
+bazel_dep(name = "rules_java", version = "5.0.0")
+
+# Load Groovy SDK and test dependencies via module extension
+groovy = use_extension("//groovy:extensions.bzl", "groovy")
+use_repo(groovy, "groovy_sdk_artifact", "junit_artifact", "spock_artifact")
