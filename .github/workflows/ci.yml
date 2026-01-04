@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.mode }} / ${{ matrix.os }} / Bazel ${{ matrix.bazel-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        bazel-version: ['7.x', '8.x']
+        mode: [workspace, bzlmod]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bazelisk
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Build (WORKSPACE)
+        if: matrix.mode == 'workspace'
+        run: bazel build //...
+        env:
+          USE_BAZEL_VERSION: ${{ matrix.bazel-version }}
+
+      - name: Build (bzlmod)
+        if: matrix.mode == 'bzlmod'
+        run: bazel build --config=bzlmod //...
+        env:
+          USE_BAZEL_VERSION: ${{ matrix.bazel-version }}
