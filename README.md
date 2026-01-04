@@ -23,26 +23,30 @@ libraries and vice-versa.
 <a name="setup"></a>
 ## Setup
 
-To be able to use the Groovy rules, you must provide bindings for the following
-targets:
+### Bzlmod (Bazel 7+, recommended)
 
-  * `//external:groovy-sdk`, pointing at the
-    [Groovy SDK binaries](http://www.groovy-lang.org/download.html)
-  * `//external:groovy`, pointing at the Groovy core language jar
-  * `//external:junit`, pointing at JUnit (only required if using the test rules)
-  * `//external:spock`, pointing at Spock (only required if using `spock_test`)
+Add to your `MODULE.bazel`:
 
-The easiest way to do so is to add the following to your `WORKSPACE` file:
+```python
+bazel_dep(name = "rules_groovy", version = "0.0.7")
+
+groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
+use_repo(groovy, "groovy_sdk_artifact", "junit_artifact", "spock_artifact")
+```
+
+### WORKSPACE (legacy)
+
+Add the following to your `WORKSPACE` file:
 
 ```python
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 http_archive(
-    name = "io_bazel_rules_groovy",
-    url = "https://github.com/bazelbuild/rules_groovy/archive/0.0.6.tar.gz",
-    sha256 = "21c7172786623f280402d3b3a2fc92f36568afad5a4f6f5ea38fd1c6897aecf8",
-    strip_prefix = "rules_groovy-0.0.6",
+    name = "rules_groovy",
+    url = "https://github.com/bazelbuild/rules_groovy/archive/0.0.7.tar.gz",
+    sha256 = "...",  # TODO: Update after release
+    strip_prefix = "rules_groovy-0.0.7",
 )
-load("@io_bazel_rules_groovy//groovy:repositories.bzl", "rules_groovy_dependencies")
+load("@rules_groovy//groovy:repositories.bzl", "rules_groovy_dependencies")
 rules_groovy_dependencies()
 ```
 
@@ -73,7 +77,7 @@ Then, to build the code under src/main/groovy/lib/, your
 `src/main/groovy/lib/BUILD` can look like this:
 
 ```python
-load("@io_bazel_rules_groovy//groovy:groovy.bzl", "groovy_library")
+load("@rules_groovy//groovy:groovy.bzl", "groovy_library")
 
 groovy_library(
     name = "groovylib",
@@ -96,7 +100,7 @@ reference the Java code, but not vice-versa. Your `src/main/groovy/lib/BUILD`
 file would then look like this:
 
 ```python
-load("@io_bazel_rules_groovy//groovy:groovy.bzl", "groovy_and_java_library")
+load("@rules_groovy//groovy:groovy.bzl", "groovy_and_java_library")
 
 groovy_and_java_library(
     name = "lib",
@@ -108,7 +112,7 @@ To build the application under src/main/groovy/app, you can define a binary
 using `groovy_binary` as follows:
 
 ```python
-load("@io_bazel_rules_groovy//groovy:groovy.bzl", "groovy_binary")
+load("@rules_groovy//groovy:groovy.bzl", "groovy_binary")
 
 groovy_binary(
     name = "GroovyApp",
@@ -127,7 +131,7 @@ To build the test under src/test/groovy/lib, your BUILD file would look like
 this:
 
 ```python
-load("@io_bazel_rules_groovy//groovy:groovy.bzl", "groovy_test", "groovy_library")
+load("@rules_groovy//groovy:groovy.bzl", "groovy_library", "groovy_test")
 
 
 groovy_library(
