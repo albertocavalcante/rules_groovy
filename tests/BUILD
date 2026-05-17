@@ -1,5 +1,13 @@
 load("@rules_java//java:defs.bzl", "java_binary", "java_library")
 load("//groovy:toolchain.bzl", "groovy_deps", "groovy_toolchain")
+load(
+    ":path_to_class_test.bzl",
+    "custom_root_test",
+    "default_roots_test",
+    "longest_prefix_wins_test",
+    "no_match_failure_test",
+    "no_match_rule",
+)
 load(":toolchain_test.bzl", "groovy_deps_rejects_non_java_test", "toolchain_rejects_non_deps_provider_test", "toolchain_round_trip_test")
 
 package(default_visibility = ["//visibility:private"])
@@ -100,5 +108,35 @@ test_suite(
         ":groovy_deps_rejects_non_java_analysis_test",
         ":toolchain_rejects_non_deps_provider_analysis_test",
         ":toolchain_round_trip_analysis_test",
+    ],
+)
+
+# path_to_class unit tests (ISSUE-002 + ISSUE-025) ---------------------------
+
+default_roots_test(name = "path_to_class_default_roots_test")
+
+custom_root_test(name = "path_to_class_custom_root_test")
+
+longest_prefix_wins_test(name = "path_to_class_longest_prefix_wins_test")
+
+# Fixture for the no-match analysistest: `path_to_class` fails during
+# analysis when given a path that no configured root matches.
+no_match_rule(
+    name = "path_to_class_no_match_fixture",
+    tags = ["manual"],
+)
+
+no_match_failure_test(
+    name = "path_to_class_no_match_failure_test",
+    target_under_test = ":path_to_class_no_match_fixture",
+)
+
+test_suite(
+    name = "all_path_to_class_tests",
+    tests = [
+        ":path_to_class_custom_root_test",
+        ":path_to_class_default_roots_test",
+        ":path_to_class_longest_prefix_wins_test",
+        ":path_to_class_no_match_failure_test",
     ],
 )
