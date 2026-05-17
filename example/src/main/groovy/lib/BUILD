@@ -1,3 +1,4 @@
+load("@rules_java//java:defs.bzl", "java_library")
 load("//groovy:groovy.bzl", "groovy_and_java_library", "groovy_library")
 
 groovy_library(

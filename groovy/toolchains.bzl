@@ -35,6 +35,7 @@ _GROOVY_VERSION = "2.5.8"
 _GROOVY_SHA256 = "49fb14b98f9fed1744781e4383cf8bff76440032f58eb5fabdc9e67a5daa8742"
 
 _GROOVY_BUILD_FILE = """
+load("@rules_java//java:defs.bzl", "java_import")
 filegroup(
     name = "sdk",
     srcs = glob(["groovy-2.5.8/**"]),

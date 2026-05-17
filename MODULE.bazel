@@ -6,8 +6,7 @@ module(
     # The publish workflow will set this when publishing to BCR.
 )
 
-# Minimum required version to avoid forcing dependency upgrades
-bazel_dep(name = "rules_java", version = "5.0.0")
+bazel_dep(name = "rules_java", version = "9.6.1")
 
 # Load Groovy SDK and test dependencies via module extension
 groovy = use_extension("//groovy:extensions.bzl", "groovy")

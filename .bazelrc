@@ -1,10 +1,8 @@
-# Use remote JDK 11 for building
-build --java_runtime_version=remotejdk_11
+common --enable_bzlmod
 
-# Default: WORKSPACE mode for backward compatibility (Bazel 8+ defaults to bzlmod)
-common --noenable_bzlmod
-common --enable_workspace
-
-# Bzlmod testing: bazel build --config=bzlmod //...
+# Bazel 9 has bzlmod on by default. `--config=bzlmod` is kept as a
+# no-op alias so the CI workflow's legacy invocation continues to
+# work and users on Bazel 7/8 can opt in explicitly.
 common:bzlmod --enable_bzlmod
-common:bzlmod --noenable_workspace
+
+build --java_runtime_version=remotejdk_11
