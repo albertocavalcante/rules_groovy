@@ -1,0 +1,40 @@
+load("@rules_java//java:defs.bzl", "java_library")
+load("//groovy:groovy.bzl", "groovy_and_java_library", "groovy_library")
+
+# `groovy_and_java_library` partitions `srcs` by extension, compiles each
+# half with the right toolchain, and bundles them into one `java_import`.
+# Groovy may reference Java types; the Java half does not see Groovy.
+groovy_and_java_library(
+    name = "mixed",
+    srcs = [
+        "src/main/groovy/mixed/Caller.groovy",
+        "src/main/java/mixed/Helper.java",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+# The inverse direction (Java depending on a Groovy library) is expressed
+# via two separate targets with an explicit `deps` edge.
+groovy_library(
+    name = "lib_groovy",
+    srcs = ["src/main/groovy/mixed/Caller.groovy"],
+    deps = [":lib_java"],
+)
+
+java_library(
+    name = "lib_java",
+    srcs = ["src/main/java/mixed/Helper.java"],
+    visibility = ["//visibility:public"],
+)
+
+java_library(
+    name = "java_calls_groovy",
+    srcs = ["src/main/java/mixed/JavaCallsGroovy.java"],
+    deps = [
+        ":lib_groovy",
+        # Java code that references a Groovy-compiled class must see
+        # `groovy.lang.GroovyObject` on the compile classpath; the
+        # Groovy SDK jar from the active toolchain provides it.
+        "@groovy_sdk_artifact//:groovy",
+    ],
+)
