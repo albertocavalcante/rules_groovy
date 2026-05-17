@@ -91,6 +91,25 @@ Named bundle of JavaInfo-providing deps reachable from a toolchain (dep_provider
 | <a id="GroovyDepsInfo-java_info"></a>java_info |  JavaInfo: the actual dep bundle for consumers.    |
 
 
+<a id="GroovyLibraryInfo"></a>
+
+## GroovyLibraryInfo
+
+<pre>
+load("@rules_groovy//groovy:toolchain.bzl", "GroovyLibraryInfo")
+
+GroovyLibraryInfo(<a href="#GroovyLibraryInfo-srcs">srcs</a>)
+</pre>
+
+Groovy-specific library metadata. Companion to `JavaInfo` on every `groovy_library` target. Reserved for future `gazelle-groovy` and strict-deps tooling; consumers should not depend on the field list being stable across major versions.
+
+**FIELDS**
+
+| Name  | Description |
+| :------------- | :------------- |
+| <a id="GroovyLibraryInfo-srcs"></a>srcs |  depset[File]: the .groovy and .java sources that produced this library.    |
+
+
 <a id="GroovyToolchainInfo"></a>
 
 ## GroovyToolchainInfo

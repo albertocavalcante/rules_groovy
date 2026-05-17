@@ -32,11 +32,13 @@ java_library(
     name = "java_calls_groovy",
     srcs = ["src/main/java/mixed/JavaCallsGroovy.java"],
     deps = [
+        # `groovy_library` re-exports the active toolchain's SDK runtime
+        # jar via its `JavaInfo.exports` (since PR #21 / ISSUE-061), so
+        # Java code that references a Groovy-compiled class transparently
+        # sees `groovy.lang.GroovyObject` on the compile classpath
+        # through `:lib_groovy` without naming `@groovy_sdk_artifact` by
+        # literal label.
         ":lib_groovy",
-        # Java code that references a Groovy-compiled class must see
-        # `groovy.lang.GroovyObject` on the compile classpath; the
-        # Groovy SDK jar from the active toolchain provides it.
-        "@groovy_sdk_artifact//:groovy",
     ],
 )
 

@@ -38,6 +38,16 @@ the shape; the action wiring lives in `groovy/private/actions.bzl`.
 
 load("@rules_java//java:defs.bzl", "JavaInfo")
 
+GroovyLibraryInfo = provider(
+    doc = "Groovy-specific library metadata. Companion to `JavaInfo` on every " +
+          "`groovy_library` target. Reserved for future `gazelle-groovy` and " +
+          "strict-deps tooling; consumers should not depend on the field list " +
+          "being stable across major versions.",
+    fields = {
+        "srcs": "depset[File]: the .groovy and .java sources that produced this library.",
+    },
+)
+
 GroovyToolchainInfo = provider(
     doc = "Resolved Groovy SDK + runtime info for a single toolchain instance.",
     fields = {

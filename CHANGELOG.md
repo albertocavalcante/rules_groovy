@@ -8,6 +8,10 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ### Added
 
+- `GroovyLibraryInfo` provider, returned alongside `JavaInfo` by every
+  `groovy_library` target. Carries the source-file `depset` for future
+  `gazelle-groovy` and strict-deps tooling. Field list is intentionally
+  small; not yet covered by SemVer until v0.2.0. (#21)
 - `examples/` directory: self-contained Bazel modules exercising the
   ruleset as a downstream consumer. Each subdir's `MODULE.bazel`
   pulls in `rules_groovy` via `local_path_override` and is built /
@@ -26,6 +30,32 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ### Changed
 
+- `groovy_library` is now a single rule (not a macro+rule pair). It
+  returns `JavaInfo` directly, accepts mixed `.groovy` and `.java`
+  srcs natively via groovyc joint compilation, and gains standard
+  JVM-rule attrs: `runtime_deps`, `exports`, `data`, `resources`,
+  `neverlink`, `plugins`. Shape matches `rules_kotlin`'s
+  `kt_jvm_library`. (#21)
+- `groovy_library` re-exports the active toolchain's Groovy SDK
+  runtime jar via `JavaInfo.exports`, so any consumer
+  (`java_library`, `java_binary`, `java_test`, another
+  `groovy_library`) sees `groovy.lang.*` on both compile and runtime
+  classpath without naming `@groovy_sdk_artifact//:groovy` by literal
+  label. (#21)
+- `groovy_binary` still wraps `rules_java`'s `java_binary` macro;
+  the Groovy SDK runtime jar enters the binary's classpath via a
+  hidden `_groovy_sdk_runtime` helper rule that reads
+  `groovy_info.runtime_jar` off the toolchain. The
+  rules-java-launcher coupling is documented and scoped to a v0.2
+  follow-up. (#21)
+- The `groovy` module extension now sets
+  `root_module_direct_deps = ["groovy_toolchains"]`. Downstream
+  `MODULE.bazel` collapses to
+  `use_repo(groovy, "groovy_toolchains")`. Legacy compat repos
+  (`groovy_sdk_artifact`, `junit_artifact`, `spock_artifact`,
+  `groovy_artifacts`, `groovy_artifact_*`, `<tag>_sdk`) stay
+  internal plumbing referenced by the generated hub on the user's
+  behalf. (#21)
 - `bazel_skylib` is no longer marked `dev_dependency = True` in
   `MODULE.bazel`. The production BUILD files at `//groovy:BUILD`,
   `//groovy/private:BUILD`, and `//groovy/private/repositories:BUILD`
@@ -34,19 +64,22 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
   broke any downstream consumer the moment toolchain resolution
   touched `@rules_groovy//groovy:toolchain_type`. Caught by the new
   `examples/` integration tests. (#20)
-- Root `MODULE.bazel`'s `use_repo` on the `groovy` extension dropped
-  `groovy_sdk_artifact` and `spock_artifact`. Those labels are used
-  inside `groovy_binary` and `spock_test` macros that expand in the
-  *calling* repo's namespace; listing them in the rules' own
-  `use_repo` tied this module to the implicit-default extension graph
-  and broke downstream consumers that declared a `groovy.toolchain`
-  or `groovy.testing(spock = False)` tag (verified by the
-  `examples/junit4_test` case). `junit_artifact` and
-  `groovy_toolchains` remain, both load-bearing for the rules' own
-  targets. (#20)
+
+### Deprecated
+
+- `groovy_and_java_library` is a deprecated alias for
+  `groovy_library`. Calling either is identical now that
+  `groovy_library` accepts mixed `.groovy` + `.java` srcs natively.
+  Removed in v0.2.0. (#21)
 
 ### Removed
 
+- Literal `@junit_artifact`, `@spock_artifact`, and
+  `@groovy_sdk_artifact` label references from `groovy/groovy.bzl`.
+  Test rules (`groovy_test`, `groovy_junit_test`,
+  `groovy_junit5_test`, `spock_test`) resolve JUnit / Spock /
+  Jupiter / Platform / SDK jars off the toolchain's `dep_providers`
+  list (`GroovyDepsInfo.name`). (#21, ISSUE-061)
 - The in-tree `example/` directory and `src/test/groovy/lib/` smoke
   test. Both shared the rules' own `MODULE.bazel` and therefore could
   not catch the kind of integration bug `examples/` now catches.

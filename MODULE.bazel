@@ -42,21 +42,14 @@ bazel_dep(name = "stardoc", version = "0.8.1", dev_dependency = True)
 # the build pins.
 groovy = use_extension("//groovy:extensions.bzl", "groovy")
 
-# `junit_artifact` is the default value of `_groovy_test._implicit_deps`
-# in //groovy:groovy.bzl; the label is resolved in the rules_groovy
-# module's repo namespace, so this `use_repo` is load-bearing for the
-# JUnit 4 path. `groovy_toolchains` is consumed directly by
-# `register_toolchains` below.
-#
-# `groovy_sdk_artifact` and `spock_artifact` are referenced by literal
-# label inside the `groovy_binary` and `spock_test` macros, but those
-# labels are expanded in the *calling* repo's namespace; downstream
-# consumers `use_repo` them themselves (see `examples/<name>/MODULE.bazel`).
-# Listing them here would tie the rules_groovy module to the
-# implicit-default extension graph and break every downstream consumer
-# that declared a `groovy.toolchain` or `groovy.testing(spock = False)`
-# tag — the `examples/junit4_test` and `examples/multi_version` cases
-# in this PR.
-use_repo(groovy, "junit_artifact", "groovy_toolchains")
+# Since ISSUE-061's cleanup (PR #21), `groovy/groovy.bzl` no longer
+# references `@junit_artifact`, `@spock_artifact`, or
+# `@groovy_sdk_artifact` by literal label — test rules pull JUnit /
+# Spock / SDK jars off the toolchain's `dep_providers`, and
+# `groovy_binary` injects the SDK runtime jar via a hidden
+# `_groovy_sdk_runtime` helper rule. `groovy_toolchains` is the single
+# user-facing repo; everything else stays internal to the extension's
+# hub.
+use_repo(groovy, "groovy_toolchains")
 
 register_toolchains("@groovy_toolchains//:all")

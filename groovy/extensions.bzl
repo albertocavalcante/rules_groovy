@@ -740,7 +740,19 @@ def _groovy_impl(module_ctx):
         build_content = _hub_build_content(specs, testing, fetched, spock_label),
     )
 
-    return module_ctx.extension_metadata(reproducible = True)
+    # `root_module_direct_deps` declares which extension-emitted repos a
+    # root MODULE.bazel must list under `use_repo(groovy, ...)`. Since
+    # ISSUE-061's cleanup landed (test rules pull JUnit / Spock / SDK off
+    # the toolchain's `dep_providers` rather than literal labels), only
+    # `groovy_toolchains` is user-facing — every other repo
+    # (`groovy_sdk_artifact`, `junit_artifact`, `spock_artifact`,
+    # `groovy_artifacts`, `groovy_artifact_*`, `<tag>_sdk`) is internal
+    # plumbing the hub references on the user's behalf.
+    return module_ctx.extension_metadata(
+        root_module_direct_deps = ["groovy_toolchains"],
+        root_module_direct_dev_deps = [],
+        reproducible = True,
+    )
 
 # ---------------------------------------------------------------------------
 # Public extension declaration.

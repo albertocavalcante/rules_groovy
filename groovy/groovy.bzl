@@ -15,189 +15,246 @@
 
 """Public Groovy build rules.
 
-This file defines the user-facing macros — `groovy_library`,
+This file defines the user-facing rules and macros — `groovy_library`,
 `groovy_and_java_library`, `groovy_binary`, `groovy_test`,
-`groovy_junit_test`, and `spock_test` — plus the underlying rules that
-implement them. All actions are hermetic and resolved through the
-toolchain registered by the `groovy` module extension (see
-`extensions.bzl`).
+`groovy_junit_test`, `groovy_junit5_test`, and `spock_test`. The
+shape mirrors `rules_kotlin`'s `kt_jvm_library` — a single rule that
+returns `JavaInfo` directly, accepts mixed `.groovy` + `.java` srcs
+natively, and exposes the standard JVM-rule attribute surface
+(`runtime_deps`, `exports`, `data`, `resources`, `neverlink`,
+`plugins`).
+
+All actions are hermetic and resolved through the toolchain registered
+by the `groovy` module extension (see `extensions.bzl`).
 
 Macro signatures preserve source-level compatibility with upstream
 `bazelbuild/rules_groovy 0.0.6`; downstream BUILD files keep working
 without edits.
+
+Test rules pull JUnit / Spock / hamcrest / Jupiter / Platform artifacts
+off the toolchain's `dep_providers` list (`GroovyDepsInfo.name`); the
+legacy `@junit_artifact`, `@spock_artifact`, `@groovy_sdk_artifact`
+literal labels no longer appear in this file (ISSUE-061).
 """
 
-load("@rules_java//java:defs.bzl", "JavaInfo", "java_binary", "java_import", "java_library")
-load("//groovy/private:actions.bzl", "REQUIRED_TOOLCHAINS", "compile_groovy", "test_runtime_classpath", "write_test_launcher")
+load("@rules_java//java:defs.bzl", "JavaInfo", "java_binary", "java_library")
+load(
+    "//groovy/private:actions.bzl",
+    "GROOVY_TOOLCHAIN_TYPE",
+    "REQUIRED_TOOLCHAINS",
+    "compile_groovy",
+    "test_runtime_classpath",
+    "toolchain_deps_by_name",
+    "write_test_launcher",
+)
+load("//groovy:toolchain.bzl", "GroovyLibraryInfo")
 
 # ---------------------------------------------------------------------------
-# groovy_jar — the underlying compile rule. Produces `libNAME.jar`.
-# Toolchain-resolved, hermetic; no `_zipper`, no `_jdk`, no `_groovysdk`
-# (ISSUE-001, ISSUE-040, ISSUE-041, ISSUE-042).
+# groovy_library — single rule (not macro+rule). Returns JavaInfo directly,
+# accepts mixed .groovy + .java srcs, and re-exports the Groovy SDK runtime
+# jar via `exports` so any Java/Groovy consumer transparently sees
+# `groovy.lang.GroovyObject` on both compile and runtime classpath.
+# Shape mirrors rules_kotlin's `kt_jvm_library` (see jvm.bzl:371-410).
 # ---------------------------------------------------------------------------
 
-def _groovy_jar_impl(ctx):
+def _sdk_runtime_javainfo(ctx):
+    """Build a JavaInfo wrapping the toolchain's Groovy SDK runtime jar.
+
+    The SDK runtime jar (`groovy-X.Y.Z.jar`) carries `groovy.lang.*` types
+    every compiled Groovy class implements. Wrapping it in a JavaInfo and
+    folding into `groovy_library`'s `exports` means consumers see it on
+    both compile and runtime classpath transparently — no `use_repo` on
+    `@groovy_sdk_artifact` required downstream.
+    """
+    groovy_info = ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].groovy_info
+    return JavaInfo(
+        output_jar = groovy_info.runtime_jar,
+        compile_jar = groovy_info.runtime_jar,
+    )
+
+def _groovy_library_impl(ctx):
+    output_jar = ctx.actions.declare_file("lib" + ctx.attr.name + ".jar")
     compile_groovy(
         ctx = ctx,
         srcs = ctx.files.srcs,
         deps = ctx.attr.deps,
-        output_jar = ctx.outputs.class_jar,
+        output_jar = output_jar,
     )
-    return [DefaultInfo(files = depset([ctx.outputs.class_jar]))]
 
-_groovy_jar = rule(
-    implementation = _groovy_jar_impl,
+    sdk_runtime = _sdk_runtime_javainfo(ctx)
+    java_info = JavaInfo(
+        output_jar = output_jar,
+        compile_jar = output_jar,
+        deps = [d[JavaInfo] for d in ctx.attr.deps if JavaInfo in d],
+        runtime_deps = [d[JavaInfo] for d in ctx.attr.runtime_deps if JavaInfo in d],
+        # Re-export the SDK runtime jar so every consumer's compile +
+        # runtime classpath includes `groovy.lang.GroovyObject` without
+        # the consumer naming `@groovy_sdk_artifact//:groovy` explicitly.
+        exports = [d[JavaInfo] for d in ctx.attr.exports if JavaInfo in d] + [sdk_runtime],
+        neverlink = ctx.attr.neverlink,
+    )
+    return [
+        DefaultInfo(files = depset([output_jar])),
+        java_info,
+        GroovyLibraryInfo(srcs = depset(ctx.files.srcs)),
+    ]
+
+groovy_library = rule(
+    implementation = _groovy_library_impl,
     attrs = {
         "srcs": attr.label_list(
-            allow_empty = False,
-            # `.java` is allowed here because groovyc accepts mixed-source
-            # compilation (Groovy ↔ Java cross-references). `groovy_library`
-            # passes only `.groovy`; `groovy_and_java_library` partitions and
-            # routes `.java` through `java_library` instead.
             allow_files = [".groovy", ".java"],
+            allow_empty = False,
+            doc = "Groovy and/or Java source files. Joint-compiled by groovyc.",
         ),
         "deps": attr.label_list(
-            allow_files = [".jar"],
+            providers = [[JavaInfo]],
+            doc = "Compile- and runtime-classpath JavaInfo-providing deps.",
+        ),
+        "runtime_deps": attr.label_list(
+            providers = [[JavaInfo]],
+            doc = "Runtime-only deps. Not on compile classpath.",
+        ),
+        "exports": attr.label_list(
+            providers = [[JavaInfo]],
+            doc = "Deps re-exported to consumers of this library.",
+        ),
+        "data": attr.label_list(allow_files = True),
+        "resources": attr.label_list(
+            allow_files = True,
+            doc = "Resource files. v0.1 folds these into a side `java_library` " +
+                  "via the `groovy_test` / `groovy_junit_test` macros; for a " +
+                  "`groovy_library` consumer, attach a separate `java_library` " +
+                  "with `resources = [...]` and list it in `deps` until the " +
+                  "v0.2 inline-resources support lands.",
+        ),
+        "neverlink": attr.bool(default = False),
+        "plugins": attr.label_list(
+            providers = [[JavaInfo]],
+            doc = "Java compiler plugins. Currently a no-op for Groovy; reserved.",
         ),
     },
-    outputs = {
-        "class_jar": "lib%{name}.jar",
-    },
     toolchains = REQUIRED_TOOLCHAINS,
-    doc = "Compiles Groovy sources into a deterministic library JAR. " +
-          "Internal — use `groovy_library` / `groovy_and_java_library`.",
+    provides = [JavaInfo, GroovyLibraryInfo],
+    doc = "Compile Groovy (and optionally Java) sources into a JVM library jar. " +
+          "Returns `JavaInfo` directly; consumers may depend on this target " +
+          "from `java_library`, `java_binary`, `java_test`, or another " +
+          "`groovy_library` interchangeably.",
 )
 
 # ---------------------------------------------------------------------------
-# Public macros: library + binary
+# _groovy_sdk_runtime — internal rule that exposes the toolchain's Groovy
+# SDK runtime jar as a JavaInfo-providing target. Consumed by `groovy_binary`
+# (a macro that wraps `java_binary`) so the binary's runtime classpath
+# carries `groovy.lang.*` without naming `@groovy_sdk_artifact//:groovy`.
+# Re-implementing the launcher is a v0.2 follow-up; until then this is the
+# scoped-coupling fix for ISSUE-061's last hardcoded label.
 # ---------------------------------------------------------------------------
 
-def groovy_library(name, srcs = [], testonly = 0, deps = [], **kwargs):
-    """Builds a Groovy library jar.
+def _groovy_sdk_runtime_impl(ctx):
+    java_info = _sdk_runtime_javainfo(ctx)
+    return [
+        DefaultInfo(files = depset([ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].groovy_info.runtime_jar])),
+        java_info,
+    ]
 
-    Analogous to `java_library`, but accepts `.groovy` sources instead of
-    `.java`. The compiled jar is wrapped in a `java_import` so that Java
-    rules can depend on it transparently — `java_library`, `java_binary`,
-    and `java_test` all consume `groovy_library` targets via their `deps`
-    attribute.
+_groovy_sdk_runtime = rule(
+    implementation = _groovy_sdk_runtime_impl,
+    toolchains = [GROOVY_TOOLCHAIN_TYPE],
+    provides = [JavaInfo],
+    doc = "Internal: exposes the active Groovy toolchain's runtime jar as JavaInfo.",
+)
 
-    Args:
-      name: A unique name for this target.
-      srcs: List of `.groovy` source files to compile.
-      testonly: If `1`, the resulting `java_import` is testonly; only
-        other testonly targets may depend on it. Defaults to `0`.
-      deps: List of libraries or raw `.jar` files on the compile-time
-        classpath. Accepts `groovy_library`, `java_library`,
-        `groovy_and_java_library`, and `.jar` labels.
-      **kwargs: Additional arguments forwarded to the wrapping
-        `java_import` (e.g. `visibility`, `tags`, `runtime_deps`).
-    """
-    _groovy_jar(
-        name = name + "-impl",
-        srcs = srcs,
-        testonly = testonly,
-        deps = deps,
-    )
-    java_import(
-        name = name,
-        jars = [name + "-impl"],
-        testonly = testonly,
-        deps = deps,
-        **kwargs
-    )
+# ---------------------------------------------------------------------------
+# groovy_and_java_library — deprecated alias. Forwards to `groovy_library`,
+# which since this PR accepts mixed `.groovy` + `.java` srcs natively via
+# groovyc joint compilation.
+# ---------------------------------------------------------------------------
 
-def groovy_and_java_library(name, srcs = [], testonly = 0, deps = [], **kwargs):
-    """Builds a mixed Groovy + Java library from a single source list.
+def groovy_and_java_library(name, srcs = [], deps = [], **kwargs):
+    """Deprecated alias for `groovy_library`.
 
-    Splits `srcs` by extension into a `java_library` (`.java` files) and a
-    Groovy compile (`.groovy` files), then bundles both into one
-    `java_import`. The Groovy side depends on the Java side, so Groovy
-    code may reference Java types but not vice-versa.
-
-    Use this rule when Groovy and Java sources are tightly coupled and
-    you don't want to maintain two BUILD targets by hand. For looser
-    coupling, prefer two separate targets — one `groovy_library`, one
-    `java_library` — with an explicit `deps` edge.
+    `groovy_library` now accepts mixed `.groovy` and `.java` srcs natively
+    via joint compilation through groovyc; there is no behavioral
+    difference between calling `groovy_library(...)` and
+    `groovy_and_java_library(...)`. This alias exists only for
+    source-level compatibility with upstream `bazelbuild/rules_groovy
+    0.0.6` BUILD files.
 
     Args:
       name: A unique name for this target.
-      srcs: List of `.groovy` and `.java` source files.
-      testonly: If `1`, the resulting `java_import` is testonly. Defaults
-        to `0`.
-      deps: List of libraries or raw `.jar` files on the compile-time
-        classpath of both sub-libraries.
-      **kwargs: Additional arguments forwarded to the wrapping
-        `java_import`.
+      srcs: List of `.groovy` and/or `.java` source files.
+      deps: Compile- and runtime-classpath JavaInfo-providing deps.
+      **kwargs: Forwarded verbatim to `groovy_library`.
+
+    Deprecated:
+      Use `groovy_library` directly. This alias is removed in v0.2.0.
     """
-    groovy_deps = deps
-    jars = []
+    groovy_library(name = name, srcs = srcs, deps = deps, **kwargs)
 
-    # Put all .java sources in a java_library
-    java_srcs = [src for src in srcs if src.endswith(".java")]
-    if java_srcs:
-        java_library(
-            name = name + "-java",
-            srcs = java_srcs,
-            testonly = testonly,
-            deps = deps,
-        )
-        groovy_deps = depset(groovy_deps + [name + "-java"])
-        jars += ["lib" + name + "-java.jar"]
+# ---------------------------------------------------------------------------
+# groovy_binary — keeps wrapping rules_java's `java_binary` macro. The
+# coupling is scoped and documented; re-implementing the launcher
+# (Linux/Windows/coverage) is a v0.2 follow-up if needed.
+#
+# The runtime Groovy SDK jar is added via a hidden `_groovy_sdk_runtime`
+# target rather than a literal `@groovy_sdk_artifact//:groovy` label so
+# the rules' own `groovy/groovy.bzl` stays free of legacy compat-repo
+# names (ISSUE-061).
+# ---------------------------------------------------------------------------
 
-    # Put all .groovy sources in a groovy_library depending on the java_library
-    groovy_srcs = [src for src in srcs if src.endswith(".groovy")]
-    if groovy_srcs:
-        _groovy_jar(
-            name = name + "-groovy",
-            srcs = groovy_srcs,
-            testonly = testonly,
-            deps = groovy_deps,
-        )
-        jars += ["lib" + name + "-groovy.jar"]
-
-    # Output a java_import combining both libraries
-    java_import(
-        name = name,
-        jars = jars,
-        testonly = testonly,
-        deps = deps,
-        **kwargs
-    )
-
-def groovy_binary(name, main_class, srcs = [], testonly = 0, deps = [], **kwargs):
+def groovy_binary(name, main_class, srcs = [], deps = [], testonly = 0, **kwargs):
     """Builds an executable Groovy application.
 
-    Analogous to `java_binary` but accepts `.groovy` sources. Produces a
-    runnable target you can launch with `bazel run`. The Groovy runtime
-    jar resolved by the active toolchain is added to `runtime_deps`
-    automatically, so users don't have to depend on `@groovy_sdk_artifact`
-    explicitly.
+    Analogous to `java_binary` but accepts `.groovy` (and `.java`) sources.
+    Produces a runnable target you can launch with `bazel run`.
+
+    NOTE: this macro composes `rules_java`'s `java_binary` rule for the
+    runnable wrapper. That's a deliberate, scoped coupling — re-implementing
+    the launcher script (Linux/Windows/coverage) is non-trivial and a v0.2
+    follow-up if needed. The Groovy SDK runtime jar enters the binary's
+    classpath via a hidden `_groovy_sdk_runtime` helper rule so this macro
+    no longer needs to reference `@groovy_sdk_artifact//:groovy` by literal
+    label.
 
     Args:
       name: A unique name for this target.
       main_class: Fully-qualified name of the entry-point class, or the
         name of a Groovy script class. See the
         [Groovy docs on scripts vs. classes](https://www.groovy-lang.org/structure.html#_scripts_versus_classes).
-      srcs: List of `.groovy` source files compiled into the binary. May
-        be empty if `deps` already provides the entry point.
-      testonly: If `1`, the binary is testonly. Defaults to `0`.
+      srcs: List of `.groovy` and/or `.java` source files compiled into
+        the binary. May be empty if `deps` already provides the entry
+        point.
       deps: Libraries on both the compile-time and runtime classpath.
+      testonly: If `1`, the binary is testonly. Defaults to `0`.
       **kwargs: Additional arguments forwarded to the underlying
         `java_binary` (e.g. `jvm_flags`, `visibility`, `data`).
     """
-    all_deps = deps + ["@groovy_sdk_artifact//:groovy"]
+    sdk_runtime = name + "_groovy_sdk_runtime"
+    _groovy_sdk_runtime(
+        name = sdk_runtime,
+        testonly = testonly,
+    )
+    all_runtime_deps = [":" + sdk_runtime]
     if srcs:
+        lib = name + "_lib"
         groovy_library(
-            name = name + "-lib",
+            name = lib,
             srcs = srcs,
             testonly = testonly,
             deps = deps,
         )
-        all_deps += [name + "-lib"]
+        all_runtime_deps.append(":" + lib)
+    else:
+        # When srcs is empty the caller's deps carry the main class; flow
+        # them through as runtime_deps so the launcher's classpath
+        # resolves the entry point.
+        all_runtime_deps.extend(deps)
+
     java_binary(
         name = name,
         main_class = main_class,
-        runtime_deps = all_deps,
+        runtime_deps = all_runtime_deps,
         testonly = testonly,
         **kwargs
     )
@@ -254,17 +311,18 @@ def path_to_class(path, src_roots = _DEFAULT_SRC_ROOTS):
 # ---------------------------------------------------------------------------
 # groovy_test — toolchain-resolved test launcher.
 # ISSUE-003: returns [DefaultInfo(runfiles=...)] instead of legacy struct.
+# ISSUE-061: implicit JUnit/Spock deps come off the toolchain's
+# `dep_providers` list (logical names like `"junit_runner"`, `"spock"`),
+# not literal `@junit_artifact` / `@spock_artifact` labels.
 # ---------------------------------------------------------------------------
 
 def _groovy_test_impl(ctx):
     # Resolve the runtime classpath off the toolchain + caller-supplied deps.
-    # `test_runtime_classpath` now pulls every `GroovyDepsInfo` reachable
-    # from the toolchain too, so JUnit / Spock / Jupiter / Platform jars
-    # land on the classpath without callers (or our own `_implicit_deps`)
-    # having to re-list them. The literal `@junit_artifact` / `@spock_artifact`
-    # labels still flow through `_implicit_deps` for the JUnit 4 / Spock 1.3
-    # path; full ISSUE-061 cleanup is a follow-up.
-    classpath = test_runtime_classpath(ctx, ctx.attr.deps + ctx.attr._implicit_deps)
+    # `test_runtime_classpath` pulls every `GroovyDepsInfo` reachable from
+    # the toolchain too, so JUnit / Spock / Jupiter / Platform jars land on
+    # the classpath without callers (or our own rule attrs) having to
+    # re-list them.
+    classpath = test_runtime_classpath(ctx, ctx.attr.deps)
     classes = [path_to_class(src.path, ctx.attr.src_roots) for src in ctx.files.srcs]
 
     # The runner main class is sourced from the toolchain so the module
@@ -272,7 +330,7 @@ def _groovy_test_impl(ctx):
     # = "5")` and the Spock-2 auto-promotion path both flip this to
     # `org.junit.platform.console.ConsoleLauncher`; everything else stays
     # on `org.junit.runner.JUnitCore` (the toolchain default).
-    runner_class = ctx.toolchains["//groovy:toolchain_type"].groovy_info.runner_class
+    runner_class = ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].groovy_info.runner_class
 
     write_test_launcher(
         ctx = ctx,
@@ -314,14 +372,11 @@ _groovy_test = rule(
                   "must live under one of these roots. Longest matching root wins. " +
                   "The default matches Maven-style layouts at the workspace root.",
         ),
-        "_implicit_deps": attr.label_list(default = [
-            Label("@junit_artifact//jar"),
-        ]),
     },
     test = True,
     toolchains = REQUIRED_TOOLCHAINS,
     doc = "Toolchain-resolved Groovy test rule. Internal — use `groovy_test`, " +
-          "`groovy_junit_test`, or `spock_test`.",
+          "`groovy_junit_test`, `groovy_junit5_test`, or `spock_test`.",
 )
 
 def groovy_test(
@@ -347,15 +402,20 @@ def groovy_test(
     — without rewriting `groovy/groovy.bzl`.
 
     For convenience wrappers around JUnit/Spock that also handle library
-    splitting, see `groovy_junit_test` and `spock_test`.
+    splitting, see `groovy_junit_test`, `groovy_junit5_test`, and
+    `spock_test`.
+
+    JUnit / Spock jars land on the test classpath through the active
+    toolchain's `dep_providers` (logical names like `"junit_runner"`,
+    `"spock"`); the test rules no longer carry literal `@junit_artifact`
+    / `@spock_artifact` labels (ISSUE-061).
 
     Args:
       name: A unique name for this target.
       deps: Libraries on both compile-time and runtime classpath.
-        Accepts `groovy_library`, `java_library`,
-        `groovy_and_java_library`, and `.jar` labels.
-      srcs: List of `.groovy` source files whose names map to JUnit test
-        classes.
+        Accepts `groovy_library`, `java_library`, and `.jar` labels.
+      srcs: List of `.groovy` / `.java` source files whose names map to
+        JUnit test classes.
       data: Runtime data files made available via Bazel runfiles.
       resources: Files packaged into a side `java_library` and added to
         the test classpath (useful for classpath-resource lookups).
@@ -368,7 +428,14 @@ def groovy_test(
         matching root wins.
     """
 
-    # Create an extra jar to hold the resource files if any were specified
+    # Resources: v0.1 keeps the legacy side `java_library(resources = ...)`
+    # target because folding classpath resources into the main `groovy_library`
+    # jar requires either a `compile_groovy` extension or a small new
+    # singlejar-merge action; both are v0.2 follow-ups. `java_library` is the
+    # only `rules_java` usage in this file other than `java_binary` (for
+    # `groovy_binary`). When `resources` is empty (the common case in the
+    # `examples/` matrix) no `java_library` target is created and the macro
+    # body avoids the `rules_java` macro entirely.
     all_deps = deps
     if resources:
         java_library(
@@ -376,7 +443,7 @@ def groovy_test(
             resources = resources,
             testonly = 1,
         )
-        all_deps += [name + "-resources"]
+        all_deps = all_deps + [name + "-resources"]
 
     _groovy_test(
         name = name,
@@ -401,22 +468,24 @@ def groovy_junit_test(
         size = "small",
         tags = [],
         src_roots = _DEFAULT_SRC_ROOTS):
-    """Convenience macro for JUnit-driven Groovy tests with helper sources.
+    """Convenience macro for JUnit-4-driven Groovy tests with helper sources.
 
     Splits inputs into a test-only library + a `groovy_test` target. Use
     this when your tests share helper Groovy or Java types that aren't
-    themselves test specifications.
+    themselves test specifications. JUnit jars come from the active
+    toolchain's `dep_providers`, not a literal `@junit_artifact` label
+    (ISSUE-061).
 
     `tests` are the JUnit-runnable specs; `groovy_srcs` and `java_srcs`
     are compiled into supporting libraries on the test classpath.
 
     Args:
       name: A unique name for this target.
-      tests: `.groovy` files that define JUnit test classes (the
-        runnable specs).
+      tests: `.groovy` / `.java` files that define JUnit test classes
+        (the runnable specs).
       deps: Libraries on both compile-time and runtime classpath.
-      groovy_srcs: Additional `.groovy` helper sources compiled into a
-        supporting `groovy_library`.
+      groovy_srcs: Additional `.groovy` / `.java` helper sources compiled
+        into a supporting `groovy_library`.
       java_srcs: Additional `.java` helper sources compiled into a
         supporting `java_library`.
       data: Runtime data files exposed via runfiles.
@@ -429,31 +498,22 @@ def groovy_junit_test(
         `groovy_test` for FQCN derivation. Defaults to
         `["src/test/groovy", "src/test/java"]`.
     """
-    groovy_lib_deps = deps + ["@junit_artifact//jar"]
-    test_deps = deps + ["@junit_artifact//jar"]
-
     if len(tests) == 0:
         fail("Must provide at least one file in tests")
 
-    # Put all Java sources into a Java library
-    if java_srcs:
-        java_library(
-            name = name + "-javalib",
-            srcs = java_srcs,
-            testonly = 1,
-            deps = deps + ["@junit_artifact//jar"],
-        )
-        groovy_lib_deps += [name + "-javalib"]
-        test_deps += [name + "-javalib"]
-
-    # Put all tests and Groovy sources into a Groovy library
+    # `groovy_library` now accepts mixed `.groovy` + `.java` srcs natively
+    # via groovyc joint compilation, so the legacy split into a sidecar
+    # `java_library` for `java_srcs` collapses into a single
+    # `groovy_library` call. JUnit jars come from the toolchain's
+    # `dep_providers`; the SDK runtime jar is re-exported through the
+    # generated library's `JavaInfo.exports`.
     groovy_library(
         name = name + "-groovylib",
-        srcs = tests + groovy_srcs,
+        srcs = tests + groovy_srcs + java_srcs,
         testonly = 1,
-        deps = groovy_lib_deps,
+        deps = deps,
     )
-    test_deps += [name + "-groovylib"]
+    test_deps = deps + [name + "-groovylib"]
 
     # Create a groovy test
     groovy_test(
@@ -482,15 +542,12 @@ def groovy_junit5_test(
         src_roots = _DEFAULT_SRC_ROOTS):
     """Convenience macro for JUnit 5 (Jupiter)-driven Groovy tests.
 
-    Mirrors `groovy_junit_test`'s signature but wires the compile classpath
-    against JUnit 5 Jupiter (`@groovy_artifacts//:junit_api`) and lets the
-    test rule pick up the full JUnit 5 Platform runtime (jupiter-engine,
-    platform-launcher / engine / commons, opentest4j, apiguardian-api) from
-    the active toolchain's `dep_providers` — no literal `@junit_artifact`
-    refs in this path. The launcher invocation routes through
-    `org.junit.platform.console.ConsoleLauncher` because the active
-    toolchain's `runner_class` is set to ConsoleLauncher whenever the
-    module extension resolved a JUnit 5 testing flavor.
+    Mirrors `groovy_junit_test`'s signature but routes the runtime
+    through `org.junit.platform.console.ConsoleLauncher`. Jupiter API,
+    Jupiter Engine, and the full Platform launcher classpath
+    (platform-launcher / engine / commons, opentest4j, apiguardian-api)
+    come off the active toolchain's `dep_providers` (logical names
+    `"junit_api"`, `"junit_engine"`, `"junit_platform_launcher"`, etc.).
 
     Wiring this on top of a JUnit-4-only toolchain fails at runtime
     (ConsoleLauncher isn't on the classpath). Either declare
@@ -516,35 +573,22 @@ def groovy_junit5_test(
         `groovy_test` for FQCN derivation. Defaults to
         `["src/test/groovy", "src/test/java"]`.
     """
-
-    # JUnit 5 API jar for compile-time annotations / assertions. Sourced
-    # by alias from the @groovy_artifacts hub so the user's `*_label`
-    # overrides on the testing tag take effect transparently.
-    junit5_api = "@groovy_artifacts//:junit_api"
-
-    groovy_lib_deps = deps + [junit5_api]
-    test_deps = deps + [junit5_api]
-
     if len(tests) == 0:
         fail("Must provide at least one file in tests")
 
-    if java_srcs:
-        java_library(
-            name = name + "-javalib",
-            srcs = java_srcs,
-            testonly = 1,
-            deps = deps + [junit5_api],
-        )
-        groovy_lib_deps += [name + "-javalib"]
-        test_deps += [name + "-javalib"]
-
+    # The Jupiter API jar lands on the test classpath via the toolchain's
+    # `dep_providers` (logical name `"junit_api"`); `compile_groovy` adds
+    # every reachable `GroovyDepsInfo.java_info` to the compile classpath
+    # via the same toolchain path the test launcher uses for its runtime
+    # classpath. `groovy_library` accepts mixed `.groovy` + `.java` srcs
+    # natively so `java_srcs` folds into the single library call.
     groovy_library(
         name = name + "-groovylib",
-        srcs = tests + groovy_srcs,
+        srcs = tests + groovy_srcs + java_srcs,
         testonly = 1,
-        deps = groovy_lib_deps,
+        deps = deps,
     )
-    test_deps += [name + "-groovylib"]
+    test_deps = deps + [name + "-groovylib"]
 
     groovy_test(
         name = name,
@@ -572,14 +616,18 @@ def spock_test(
         src_roots = _DEFAULT_SRC_ROOTS):
     """Convenience macro for Spock specifications.
 
-    Wraps `specs` in a test-only `groovy_library` with JUnit and Spock
-    pinned on the classpath, then emits a `groovy_test`. The Spock jar
-    version is selected by the active toolchain's Groovy major.minor —
-    Groovy 2.5 pulls Spock 1.3 (JUnit 4 path), Groovy 3.0 / 4.0 pull Spock
-    2.3 (JUnit 5 Platform path). The launcher invocation auto-routes
-    through `org.junit.runner.JUnitCore` or
-    `org.junit.platform.console.ConsoleLauncher` based on the toolchain's
-    resolved `runner_class`; the macro itself stays signature-stable.
+    Wraps `specs` in a test-only `groovy_library` and emits a
+    `groovy_test`. The Spock jar version is selected by the active
+    toolchain's Groovy major.minor — Groovy 2.5 pulls Spock 1.3 (JUnit
+    4 path), Groovy 3.0 / 4.0 pull Spock 2.3 (JUnit 5 Platform path).
+    The launcher invocation auto-routes through `JUnitCore` or
+    `ConsoleLauncher` based on the toolchain's resolved `runner_class`;
+    the macro itself stays signature-stable.
+
+    Spock and JUnit jars come off the active toolchain's `dep_providers`
+    (logical names `"spock"`, `"junit_runner"`, `"junit_api"`, etc.); no
+    literal `@junit_artifact` / `@spock_artifact` labels appear in this
+    file (ISSUE-061).
 
     Args:
       name: A unique name for this target.
@@ -599,40 +647,19 @@ def spock_test(
         `groovy_test` for FQCN derivation. Defaults to
         `["src/test/groovy", "src/test/java"]`.
     """
-    groovy_lib_deps = deps + [
-        "@junit_artifact//jar",
-        "@spock_artifact//jar",
-    ]
-    test_deps = deps + [
-        "@junit_artifact//jar",
-        "@spock_artifact//jar",
-    ]
-
     if len(specs) == 0:
         fail("Must provide at least one file in specs")
 
-    # Put all Java sources into a Java library
-    if java_srcs:
-        java_library(
-            name = name + "-javalib",
-            srcs = java_srcs,
-            testonly = 1,
-            deps = deps + [
-                "@junit_artifact//jar",
-                "@spock_artifact//jar",
-            ],
-        )
-        groovy_lib_deps += [name + "-javalib"]
-        test_deps += [name + "-javalib"]
-
-    # Put all specs and Groovy sources into a Groovy library
+    # Single `groovy_library` for specs + helper srcs (Groovy and Java
+    # both compile through groovyc joint compilation now). Spock +
+    # JUnit jars come off the toolchain's `dep_providers`.
     groovy_library(
         name = name + "-groovylib",
-        srcs = specs + groovy_srcs,
+        srcs = specs + groovy_srcs + java_srcs,
         testonly = 1,
-        deps = groovy_lib_deps,
+        deps = deps,
     )
-    test_deps += [name + "-groovylib"]
+    test_deps = deps + [name + "-groovylib"]
 
     # Create a groovy test
     groovy_test(

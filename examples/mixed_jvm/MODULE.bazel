@@ -8,12 +8,5 @@ local_path_override(
 )
 
 groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
-use_repo(
-    groovy,
-    "groovy_sdk_artifact",
-    "junit_artifact",
-    "spock_artifact",
-    "groovy_toolchains",
-    "groovy_artifacts",
-)
+use_repo(groovy, "groovy_toolchains")
 register_toolchains("@groovy_toolchains//:all")
