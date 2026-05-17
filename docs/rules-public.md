@@ -87,7 +87,8 @@ explicitly.
 <pre>
 load("@rules_groovy//groovy:groovy.bzl", "groovy_junit_test")
 
-groovy_junit_test(<a href="#groovy_junit_test-name">name</a>, <a href="#groovy_junit_test-tests">tests</a>, <a href="#groovy_junit_test-deps">deps</a>, <a href="#groovy_junit_test-groovy_srcs">groovy_srcs</a>, <a href="#groovy_junit_test-java_srcs">java_srcs</a>, <a href="#groovy_junit_test-data">data</a>, <a href="#groovy_junit_test-resources">resources</a>, <a href="#groovy_junit_test-jvm_flags">jvm_flags</a>, <a href="#groovy_junit_test-size">size</a>, <a href="#groovy_junit_test-tags">tags</a>)
+groovy_junit_test(<a href="#groovy_junit_test-name">name</a>, <a href="#groovy_junit_test-tests">tests</a>, <a href="#groovy_junit_test-deps">deps</a>, <a href="#groovy_junit_test-groovy_srcs">groovy_srcs</a>, <a href="#groovy_junit_test-java_srcs">java_srcs</a>, <a href="#groovy_junit_test-data">data</a>, <a href="#groovy_junit_test-resources">resources</a>, <a href="#groovy_junit_test-jvm_flags">jvm_flags</a>, <a href="#groovy_junit_test-size">size</a>, <a href="#groovy_junit_test-tags">tags</a>,
+                  <a href="#groovy_junit_test-src_roots">src_roots</a>)
 </pre>
 
 Convenience macro for JUnit-driven Groovy tests with helper sources.
@@ -115,6 +116,7 @@ are compiled into supporting libraries on the test classpath.
 | <a id="groovy_junit_test-jvm_flags"></a>jvm_flags |  Flags embedded into the generated test launcher script.   |  `[]` |
 | <a id="groovy_junit_test-size"></a>size |  Bazel test size. Defaults to `small`.   |  `"small"` |
 | <a id="groovy_junit_test-tags"></a>tags |  Bazel test tags.   |  `[]` |
+| <a id="groovy_junit_test-src_roots"></a>src_roots |  Source-root prefixes forwarded to the underlying `groovy_test` for FQCN derivation. Defaults to `["src/test/groovy", "src/test/java"]`.   |  `["src/test/groovy", "src/test/java"]` |
 
 
 <a id="groovy_library"></a>
@@ -155,15 +157,20 @@ attribute.
 <pre>
 load("@rules_groovy//groovy:groovy.bzl", "groovy_test")
 
-groovy_test(<a href="#groovy_test-name">name</a>, <a href="#groovy_test-deps">deps</a>, <a href="#groovy_test-srcs">srcs</a>, <a href="#groovy_test-data">data</a>, <a href="#groovy_test-resources">resources</a>, <a href="#groovy_test-jvm_flags">jvm_flags</a>, <a href="#groovy_test-size">size</a>, <a href="#groovy_test-tags">tags</a>)
+groovy_test(<a href="#groovy_test-name">name</a>, <a href="#groovy_test-deps">deps</a>, <a href="#groovy_test-srcs">srcs</a>, <a href="#groovy_test-data">data</a>, <a href="#groovy_test-resources">resources</a>, <a href="#groovy_test-jvm_flags">jvm_flags</a>, <a href="#groovy_test-size">size</a>, <a href="#groovy_test-tags">tags</a>, <a href="#groovy_test-src_roots">src_roots</a>)
 </pre>
 
 Runs Groovy tests under JUnit 4 (`JUnitCore`).
 
-Source filenames are converted to fully-qualified class names via
-`path_to_class`, which requires sources to live under
-`src/test/groovy/...` or `src/test/java/...`. Each derived class is
-passed to `org.junit.runner.JUnitCore` at execution time.
+Source filenames are converted to fully-qualified class names by
+stripping the longest matching prefix in `src_roots`, then dropping
+the `.groovy` / `.java` extension. Each derived class is passed to
+`org.junit.runner.JUnitCore` at execution time.
+
+The default `src_roots` matches Maven-style layouts at the workspace
+root (`src/test/groovy`, `src/test/java`). Override it to host tests
+under arbitrary directory trees — e.g. `["example/foo/src/test/groovy"]`
+— without rewriting `groovy/groovy.bzl`.
 
 For convenience wrappers around JUnit/Spock that also handle library
 splitting, see `groovy_junit_test` and `spock_test`.
@@ -182,6 +189,7 @@ splitting, see `groovy_junit_test` and `spock_test`.
 | <a id="groovy_test-jvm_flags"></a>jvm_flags |  Flags embedded into the generated test launcher script.   |  `[]` |
 | <a id="groovy_test-size"></a>size |  Bazel test size — `small`, `medium`, `large`, or `enormous`. Defaults to `medium`.   |  `"medium"` |
 | <a id="groovy_test-tags"></a>tags |  Bazel test tags (e.g. `manual`, `requires-network`).   |  `[]` |
+| <a id="groovy_test-src_roots"></a>src_roots |  Source-root prefixes used to derive each test's FQCN. Defaults to `["src/test/groovy", "src/test/java"]`. Longest matching root wins.   |  `["src/test/groovy", "src/test/java"]` |
 
 
 <a id="path_to_class"></a>
@@ -191,27 +199,37 @@ splitting, see `groovy_junit_test` and `spock_test`.
 <pre>
 load("@rules_groovy//groovy:groovy.bzl", "path_to_class")
 
-path_to_class(<a href="#path_to_class-path">path</a>)
+path_to_class(<a href="#path_to_class-path">path</a>, <a href="#path_to_class-src_roots">src_roots</a>)
 </pre>
 
 Convert a test source path to a Java/Groovy fully-qualified class name.
 
-Accepts:
+Strips the longest matching prefix in `src_roots`, then drops the
+`.groovy` or `.java` extension, then converts `/` to `.`.
+
+With the default `src_roots`:
+
   * `src/test/groovy/<pkg>/<Cls>.groovy` → `<pkg>.<Cls>`
   * `src/test/java/<pkg>/<Cls>.java`     → `<pkg>.<Cls>`
   * `src/test/java/<pkg>/<Cls>.groovy`   → `<pkg>.<Cls>`  (Groovy under java/
                                                           is legal — groovyc
                                                           accepts mixed sources)
 
-Fails loudly on any other layout. ISSUE-025 (v0.2) generalizes via a
-`src_roots` attr.
+Custom roots — e.g. `src_roots = ["example/foo/src/test/groovy"]` —
+work the same way; the longest matching root wins so nested layouts
+behave sensibly.
+
+Fails loudly when no root matches, or when the source's extension is
+not `.groovy` / `.java`.
+
 
 **PARAMETERS**
 
 
 | Name  | Description | Default Value |
 | :------------- | :------------- | :------------- |
-| <a id="path_to_class-path"></a>path |  <p align="center"> - </p>   |  none |
+| <a id="path_to_class-path"></a>path |  Workspace-relative path to a test source file.   |  none |
+| <a id="path_to_class-src_roots"></a>src_roots |  Source-root prefixes to try, longest first. Defaults to `["src/test/groovy", "src/test/java"]`.   |  `["src/test/groovy", "src/test/java"]` |
 
 
 <a id="spock_test"></a>
@@ -221,7 +239,8 @@ Fails loudly on any other layout. ISSUE-025 (v0.2) generalizes via a
 <pre>
 load("@rules_groovy//groovy:groovy.bzl", "spock_test")
 
-spock_test(<a href="#spock_test-name">name</a>, <a href="#spock_test-specs">specs</a>, <a href="#spock_test-deps">deps</a>, <a href="#spock_test-groovy_srcs">groovy_srcs</a>, <a href="#spock_test-java_srcs">java_srcs</a>, <a href="#spock_test-data">data</a>, <a href="#spock_test-resources">resources</a>, <a href="#spock_test-jvm_flags">jvm_flags</a>, <a href="#spock_test-size">size</a>, <a href="#spock_test-tags">tags</a>)
+spock_test(<a href="#spock_test-name">name</a>, <a href="#spock_test-specs">specs</a>, <a href="#spock_test-deps">deps</a>, <a href="#spock_test-groovy_srcs">groovy_srcs</a>, <a href="#spock_test-java_srcs">java_srcs</a>, <a href="#spock_test-data">data</a>, <a href="#spock_test-resources">resources</a>, <a href="#spock_test-jvm_flags">jvm_flags</a>, <a href="#spock_test-size">size</a>, <a href="#spock_test-tags">tags</a>,
+           <a href="#spock_test-src_roots">src_roots</a>)
 </pre>
 
 Convenience macro for Spock specifications.
@@ -248,5 +267,6 @@ pulls Spock for 2.5, Groovy 4.0 pulls Spock for 4.0.
 | <a id="spock_test-jvm_flags"></a>jvm_flags |  Flags embedded into the generated test launcher script.   |  `[]` |
 | <a id="spock_test-size"></a>size |  Bazel test size. Defaults to `small`.   |  `"small"` |
 | <a id="spock_test-tags"></a>tags |  Bazel test tags.   |  `[]` |
+| <a id="spock_test-src_roots"></a>src_roots |  Source-root prefixes forwarded to the underlying `groovy_test` for FQCN derivation. Defaults to `["src/test/groovy", "src/test/java"]`.   |  `["src/test/groovy", "src/test/java"]` |
 
 

@@ -205,37 +205,51 @@ def groovy_binary(name, main_class, srcs = [], testonly = 0, deps = [], **kwargs
 # ---------------------------------------------------------------------------
 # path_to_class — derive a Java FQCN from a test source path.
 # ISSUE-002: slice on the source's actual extension instead of always `.groovy`.
-# `src_roots` generalization (ISSUE-025) is deferred to v0.2.
+# ISSUE-025: longest-prefix match against a caller-supplied `src_roots` list
+# (default `["src/test/groovy", "src/test/java"]`) so tests can live under
+# arbitrary directory roots, not just literal `src/test/groovy/` at the
+# workspace root.
 # ---------------------------------------------------------------------------
 
-def path_to_class(path):
+# Default source roots: Maven-style layout at the workspace root.
+_DEFAULT_SRC_ROOTS = ["src/test/groovy", "src/test/java"]
+
+def path_to_class(path, src_roots = _DEFAULT_SRC_ROOTS):
     """Convert a test source path to a Java/Groovy fully-qualified class name.
 
-    Accepts:
+    Strips the longest matching prefix in `src_roots`, then drops the
+    `.groovy` or `.java` extension, then converts `/` to `.`.
+
+    With the default `src_roots`:
+
       * `src/test/groovy/<pkg>/<Cls>.groovy` → `<pkg>.<Cls>`
       * `src/test/java/<pkg>/<Cls>.java`     → `<pkg>.<Cls>`
       * `src/test/java/<pkg>/<Cls>.groovy`   → `<pkg>.<Cls>`  (Groovy under java/
                                                               is legal — groovyc
                                                               accepts mixed sources)
 
-    Fails loudly on any other layout. ISSUE-025 (v0.2) generalizes via a
-    `src_roots` attr.
+    Custom roots — e.g. `src_roots = ["example/foo/src/test/groovy"]` —
+    work the same way; the longest matching root wins so nested layouts
+    behave sensibly.
+
+    Fails loudly when no root matches, or when the source's extension is
+    not `.groovy` / `.java`.
+
+    Args:
+      path: Workspace-relative path to a test source file.
+      src_roots: Source-root prefixes to try, longest first. Defaults to
+        `["src/test/groovy", "src/test/java"]`.
     """
-    if path.startswith("src/test/groovy/"):
-        prefix = "src/test/groovy/"
-    elif path.startswith("src/test/java/"):
-        prefix = "src/test/java/"
-    else:
-        fail("groovy_test sources must live under src/test/java or src/test/groovy, got: " + path)
-
-    if path.endswith(".groovy"):
-        ext = ".groovy"
-    elif path.endswith(".java"):
-        ext = ".java"
-    else:
-        fail("groovy_test src {} has unrecognized extension (expected .groovy or .java)".format(path))
-
-    return path[len(prefix):path.rindex(ext)].replace("/", ".")
+    sorted_roots = sorted(src_roots, key = lambda r: -len(r))
+    for root in sorted_roots:
+        prefix = root.rstrip("/") + "/"
+        if path.startswith(prefix):
+            stripped = path[len(prefix):]
+            for ext in (".groovy", ".java"):
+                if stripped.endswith(ext):
+                    return stripped[:-len(ext)].replace("/", ".")
+            fail("groovy_test source {} has an unsupported extension (expected .groovy or .java)".format(path))
+    fail("groovy_test source {} does not live under any of src_roots = {}".format(path, src_roots))
 
 # ---------------------------------------------------------------------------
 # groovy_test — toolchain-resolved test launcher.
@@ -248,7 +262,7 @@ def _groovy_test_impl(ctx):
     # until then they come through the rule's own `deps` attribute (unchanged
     # from upstream).
     classpath = test_runtime_classpath(ctx, ctx.attr.deps + ctx.attr._implicit_deps)
-    classes = [path_to_class(src.path) for src in ctx.files.srcs]
+    classes = [path_to_class(src.path, ctx.attr.src_roots) for src in ctx.files.srcs]
 
     write_test_launcher(
         ctx = ctx,
@@ -286,6 +300,13 @@ _groovy_test = rule(
         "data": attr.label_list(allow_files = True),
         "jvm_flags": attr.string_list(),
         "deps": attr.label_list(allow_files = [".jar"]),
+        "src_roots": attr.string_list(
+            default = _DEFAULT_SRC_ROOTS,
+            doc = "Source-root prefixes to strip from test source paths when " +
+                  "deriving JUnit fully-qualified class names. Each `srcs` entry " +
+                  "must live under one of these roots. Longest matching root wins. " +
+                  "The default matches Maven-style layouts at the workspace root.",
+        ),
         "_implicit_deps": attr.label_list(default = [
             Label("@junit_artifact//jar"),
         ]),
@@ -304,13 +325,19 @@ def groovy_test(
         resources = [],
         jvm_flags = [],
         size = "medium",
-        tags = []):
+        tags = [],
+        src_roots = _DEFAULT_SRC_ROOTS):
     """Runs Groovy tests under JUnit 4 (`JUnitCore`).
 
-    Source filenames are converted to fully-qualified class names via
-    `path_to_class`, which requires sources to live under
-    `src/test/groovy/...` or `src/test/java/...`. Each derived class is
-    passed to `org.junit.runner.JUnitCore` at execution time.
+    Source filenames are converted to fully-qualified class names by
+    stripping the longest matching prefix in `src_roots`, then dropping
+    the `.groovy` / `.java` extension. Each derived class is passed to
+    `org.junit.runner.JUnitCore` at execution time.
+
+    The default `src_roots` matches Maven-style layouts at the workspace
+    root (`src/test/groovy`, `src/test/java`). Override it to host tests
+    under arbitrary directory trees — e.g. `["example/foo/src/test/groovy"]`
+    — without rewriting `groovy/groovy.bzl`.
 
     For convenience wrappers around JUnit/Spock that also handle library
     splitting, see `groovy_junit_test` and `spock_test`.
@@ -329,6 +356,9 @@ def groovy_test(
       size: Bazel test size — `small`, `medium`, `large`, or `enormous`.
         Defaults to `medium`.
       tags: Bazel test tags (e.g. `manual`, `requires-network`).
+      src_roots: Source-root prefixes used to derive each test's FQCN.
+        Defaults to `["src/test/groovy", "src/test/java"]`. Longest
+        matching root wins.
     """
 
     # Create an extra jar to hold the resource files if any were specified
@@ -349,6 +379,7 @@ def groovy_test(
         deps = all_deps,
         data = data,
         jvm_flags = jvm_flags,
+        src_roots = src_roots,
     )
 
 def groovy_junit_test(
@@ -361,7 +392,8 @@ def groovy_junit_test(
         resources = [],
         jvm_flags = [],
         size = "small",
-        tags = []):
+        tags = [],
+        src_roots = _DEFAULT_SRC_ROOTS):
     """Convenience macro for JUnit-driven Groovy tests with helper sources.
 
     Splits inputs into a test-only library + a `groovy_test` target. Use
@@ -386,6 +418,9 @@ def groovy_junit_test(
       jvm_flags: Flags embedded into the generated test launcher script.
       size: Bazel test size. Defaults to `small`.
       tags: Bazel test tags.
+      src_roots: Source-root prefixes forwarded to the underlying
+        `groovy_test` for FQCN derivation. Defaults to
+        `["src/test/groovy", "src/test/java"]`.
     """
     groovy_lib_deps = deps + ["@junit_artifact//jar"]
     test_deps = deps + ["@junit_artifact//jar"]
@@ -423,6 +458,7 @@ def groovy_junit_test(
         jvm_flags = jvm_flags,
         size = size,
         tags = tags,
+        src_roots = src_roots,
     )
 
 def spock_test(
@@ -435,7 +471,8 @@ def spock_test(
         resources = [],
         jvm_flags = [],
         size = "small",
-        tags = []):
+        tags = [],
+        src_roots = _DEFAULT_SRC_ROOTS):
     """Convenience macro for Spock specifications.
 
     Wraps `specs` in a test-only `groovy_library` with JUnit and Spock
@@ -458,6 +495,9 @@ def spock_test(
       jvm_flags: Flags embedded into the generated test launcher script.
       size: Bazel test size. Defaults to `small`.
       tags: Bazel test tags.
+      src_roots: Source-root prefixes forwarded to the underlying
+        `groovy_test` for FQCN derivation. Defaults to
+        `["src/test/groovy", "src/test/java"]`.
     """
     groovy_lib_deps = deps + [
         "@junit_artifact//jar",
@@ -504,4 +544,5 @@ def spock_test(
         jvm_flags = jvm_flags,
         size = size,
         tags = tags,
+        src_roots = src_roots,
     )
