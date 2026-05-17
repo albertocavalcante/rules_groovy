@@ -172,11 +172,55 @@ def test_runtime_classpath(ctx, deps):
     Includes:
       * The Groovy SDK's full file set (jars on the classpath; the SDK
         contains the groovy runtime + the AST transforms).
+      * Every `GroovyDepsInfo` reachable from the toolchain (the JUnit /
+        Spock / Jupiter / Platform jars wired by the module extension).
+        Pulling these from the toolchain rather than caller `deps` means
+        the JUnit 5 platform jars (jupiter-engine, platform-launcher,
+        platform-engine, platform-commons, opentest4j, apiguardian-api)
+        land on the test classpath without every macro re-listing them.
       * Caller-supplied deps' transitive runtime jars (JavaInfo) or raw .jars.
     """
     groovy_info = _groovy_info(ctx)
     sdk_jars = [f for f in groovy_info.sdk_files.to_list() if f.path.endswith(".jar")]
-    return depset(sdk_jars, transitive = [_deps_classpath(deps)])
+
+    toolchain_dep_jars = []
+    for dep in ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].deps:
+        if dep.java_info != None:
+            toolchain_dep_jars.append(dep.java_info.transitive_runtime_jars)
+
+    return depset(
+        sdk_jars,
+        transitive = [_deps_classpath(deps)] + toolchain_dep_jars,
+    )
+
+# FQCN of JUnit 5's `ConsoleLauncher`. Compared against the toolchain's
+# `runner_class` to pick the right test-launcher invocation shape. JUnit 4's
+# `JUnitCore` is the implicit "everything else" branch.
+JUNIT5_CONSOLE_LAUNCHER = "org.junit.platform.console.ConsoleLauncher"
+
+def _runner_args(runner_class, classes):
+    """Emit the runner-specific arg shape for the test launcher script.
+
+    JUnit 4's `JUnitCore` takes one or more bare FQCNs as positional args.
+    JUnit 5's `ConsoleLauncher` requires `--select-class <FQCN>` per spec.
+
+    Branching lives here so the launcher template stays a single bash
+    `exec` line per runner; the rule impl just hands off `runner_class`
+    and the list of resolved FQCNs.
+    """
+    if runner_class == JUNIT5_CONSOLE_LAUNCHER:
+        # `execute` is the explicit subcommand on JUnit Platform Console
+        # Launcher 1.10+; the bare `--select-class` form is deprecated
+        # (prints a warning that surfaces under `bazel test
+        # --test_output=all`). `--disable-banner` keeps the tail focused
+        # on results; `--details=tree` gives a human-readable test-tree
+        # report.
+        parts = ["execute", "--disable-banner", "--details=tree"]
+        for cls in classes:
+            parts.append("--select-class")
+            parts.append(cls)
+        return " ".join(parts)
+    return " ".join(classes)
 
 def write_test_launcher(ctx, classpath, classes, jvm_flags, runner_class):
     """Write the shell launcher script for `groovy_test`.
@@ -187,13 +231,21 @@ def write_test_launcher(ctx, classpath, classes, jvm_flags, runner_class):
     resolved JDK runtime toolchain via the runfiles tree, not from the host
     environment.
 
+    The runner-specific invocation shape (positional FQCNs for JUnitCore,
+    `--select-class` per FQCN for ConsoleLauncher) is centralized in
+    `_runner_args` so the launcher template stays a single bash `exec` line
+    regardless of which runner is in play.
+
     Args:
       ctx:          the rule context.
       classpath:    depset[File] of classpath entries (short_paths used in
                     the script — runfiles-relative).
       classes:      list[string] of test class FQCNs.
       jvm_flags:    list[string] of `-D...` / `-X...` flags passed to JVM.
-      runner_class: FQCN of the test runner main (e.g. JUnitCore).
+      runner_class: FQCN of the test runner main. `org.junit.runner.JUnitCore`
+                    for JUnit 4 (positional FQCN args);
+                    `org.junit.platform.console.ConsoleLauncher` for JUnit 5
+                    and Spock 2.x (`--select-class <FQCN>` args).
     """
     java_runtime = _java_runtime(ctx)
     # The JDK runtime's java_executable_runfiles_path is the
@@ -204,18 +256,18 @@ def write_test_launcher(ctx, classpath, classes, jvm_flags, runner_class):
 
     cp_str = ":".join([f.short_path for f in classpath.to_list()])
     flags_str = " ".join(jvm_flags)
-    classes_str = " ".join(classes)
+    runner_args = _runner_args(runner_class, classes)
 
     script = (
         "#!/usr/bin/env bash\n" +
         "set -e\n" +
-        "exec \"$(pwd)/{java_bin}\" {flags} -cp \"{cp}\" {runner} {classes}\n"
+        "exec \"$(pwd)/{java_bin}\" {flags} -cp \"{cp}\" {runner} {args}\n"
     ).format(
         java_bin = java_bin,
         flags = flags_str,
         cp = cp_str,
         runner = runner_class,
-        classes = classes_str,
+        args = runner_args,
     )
     ctx.actions.write(
         output = ctx.outputs.executable,

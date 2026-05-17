@@ -45,6 +45,10 @@ GroovyToolchainInfo = provider(
         "sdk_files": "depset[File]: full SDK contents for action inputs.",
         "runtime_jar": "File: the groovy-X.Y.Z.jar to put on the runtime classpath.",
         "version": "string: e.g. '4.0.32'. Diagnostics only - actions read SDK files, not the version string.",
+        "runner_class": "string: FQCN of the test runner main class. " +
+                        "`org.junit.runner.JUnitCore` for JUnit 4, " +
+                        "`org.junit.platform.console.ConsoleLauncher` for JUnit 5. " +
+                        "Consumed by `groovy_test`'s launcher template to pick the right invocation shape.",
     },
 )
 
@@ -68,6 +72,7 @@ def _groovy_toolchain_impl(ctx):
             sdk_files = depset(ctx.files.sdk),
             runtime_jar = ctx.file.runtime_jar,
             version = ctx.attr.version,
+            runner_class = ctx.attr.runner_class,
         ),
         deps = deps,
     )]
@@ -93,6 +98,14 @@ groovy_toolchain = rule(
         "version": attr.string(
             mandatory = True,
             doc = "Resolved SDK version string, e.g. '4.0.32'. Diagnostics only.",
+        ),
+        "runner_class": attr.string(
+            default = "org.junit.runner.JUnitCore",
+            doc = "FQCN of the test runner main class. " +
+                  "Defaults to `org.junit.runner.JUnitCore` (JUnit 4). " +
+                  "Set to `org.junit.platform.console.ConsoleLauncher` when the toolchain " +
+                  "is wired for JUnit 5 (Jupiter / Spock 2.x). The module extension sets " +
+                  "this automatically from the resolved `groovy.testing(junit = ...)` flavor.",
         ),
         "dep_providers": attr.label_list(
             providers = [[GroovyDepsInfo]],

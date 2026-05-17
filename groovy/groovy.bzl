@@ -258,21 +258,28 @@ def path_to_class(path, src_roots = _DEFAULT_SRC_ROOTS):
 
 def _groovy_test_impl(ctx):
     # Resolve the runtime classpath off the toolchain + caller-supplied deps.
-    # A follow-up routes JUnit/Spock through the toolchain's `dep_providers`;
-    # until then they come through the rule's own `deps` attribute (unchanged
-    # from upstream).
+    # `test_runtime_classpath` now pulls every `GroovyDepsInfo` reachable
+    # from the toolchain too, so JUnit / Spock / Jupiter / Platform jars
+    # land on the classpath without callers (or our own `_implicit_deps`)
+    # having to re-list them. The literal `@junit_artifact` / `@spock_artifact`
+    # labels still flow through `_implicit_deps` for the JUnit 4 / Spock 1.3
+    # path; full ISSUE-061 cleanup is a follow-up.
     classpath = test_runtime_classpath(ctx, ctx.attr.deps + ctx.attr._implicit_deps)
     classes = [path_to_class(src.path, ctx.attr.src_roots) for src in ctx.files.srcs]
+
+    # The runner main class is sourced from the toolchain so the module
+    # extension owns the JUnit 4 / JUnit 5 selection. `groovy.testing(junit
+    # = "5")` and the Spock-2 auto-promotion path both flip this to
+    # `org.junit.platform.console.ConsoleLauncher`; everything else stays
+    # on `org.junit.runner.JUnitCore` (the toolchain default).
+    runner_class = ctx.toolchains["//groovy:toolchain_type"].groovy_info.runner_class
 
     write_test_launcher(
         ctx = ctx,
         classpath = classpath,
         classes = classes,
         jvm_flags = ctx.attr.jvm_flags,
-        # Hard-coded JUnit 4 runner FQCN matches the upstream behavior; a
-        # later iteration plumbs the runner class through the toolchain so
-        # JUnit 5 works as a `groovy.testing(junit = "5")` switch.
-        runner_class = "org.junit.runner.JUnitCore",
+        runner_class = runner_class,
     )
 
     # Runfiles: classpath jars + caller-declared data + JDK runtime (so the
@@ -461,6 +468,96 @@ def groovy_junit_test(
         src_roots = src_roots,
     )
 
+def groovy_junit5_test(
+        name,
+        tests,
+        deps = [],
+        groovy_srcs = [],
+        java_srcs = [],
+        data = [],
+        resources = [],
+        jvm_flags = [],
+        size = "small",
+        tags = [],
+        src_roots = _DEFAULT_SRC_ROOTS):
+    """Convenience macro for JUnit 5 (Jupiter)-driven Groovy tests.
+
+    Mirrors `groovy_junit_test`'s signature but wires the compile classpath
+    against JUnit 5 Jupiter (`@groovy_artifacts//:junit_api`) and lets the
+    test rule pick up the full JUnit 5 Platform runtime (jupiter-engine,
+    platform-launcher / engine / commons, opentest4j, apiguardian-api) from
+    the active toolchain's `dep_providers` — no literal `@junit_artifact`
+    refs in this path. The launcher invocation routes through
+    `org.junit.platform.console.ConsoleLauncher` because the active
+    toolchain's `runner_class` is set to ConsoleLauncher whenever the
+    module extension resolved a JUnit 5 testing flavor.
+
+    Wiring this on top of a JUnit-4-only toolchain fails at runtime
+    (ConsoleLauncher isn't on the classpath). Either declare
+    `groovy.testing(junit = "5")` in your `MODULE.bazel`, or accept the
+    Groovy-4 default which auto-promotes to JUnit 5 because Spock 2.x
+    requires it.
+
+    Args:
+      name: A unique name for this target.
+      tests: `.groovy` files that define JUnit 5 (Jupiter) test classes.
+      deps: Libraries on both compile-time and runtime classpath.
+      groovy_srcs: Additional `.groovy` helper sources compiled into a
+        supporting `groovy_library`.
+      java_srcs: Additional `.java` helper sources compiled into a
+        supporting `java_library`.
+      data: Runtime data files exposed via runfiles.
+      resources: Files packaged into a side `java_library` and added to
+        the test classpath.
+      jvm_flags: Flags embedded into the generated test launcher script.
+      size: Bazel test size. Defaults to `small`.
+      tags: Bazel test tags.
+      src_roots: Source-root prefixes forwarded to the underlying
+        `groovy_test` for FQCN derivation. Defaults to
+        `["src/test/groovy", "src/test/java"]`.
+    """
+
+    # JUnit 5 API jar for compile-time annotations / assertions. Sourced
+    # by alias from the @groovy_artifacts hub so the user's `*_label`
+    # overrides on the testing tag take effect transparently.
+    junit5_api = "@groovy_artifacts//:junit_api"
+
+    groovy_lib_deps = deps + [junit5_api]
+    test_deps = deps + [junit5_api]
+
+    if len(tests) == 0:
+        fail("Must provide at least one file in tests")
+
+    if java_srcs:
+        java_library(
+            name = name + "-javalib",
+            srcs = java_srcs,
+            testonly = 1,
+            deps = deps + [junit5_api],
+        )
+        groovy_lib_deps += [name + "-javalib"]
+        test_deps += [name + "-javalib"]
+
+    groovy_library(
+        name = name + "-groovylib",
+        srcs = tests + groovy_srcs,
+        testonly = 1,
+        deps = groovy_lib_deps,
+    )
+    test_deps += [name + "-groovylib"]
+
+    groovy_test(
+        name = name,
+        deps = test_deps,
+        srcs = tests,
+        data = data,
+        resources = resources,
+        jvm_flags = jvm_flags,
+        size = size,
+        tags = tags,
+        src_roots = src_roots,
+    )
+
 def spock_test(
         name,
         specs,
@@ -476,10 +573,13 @@ def spock_test(
     """Convenience macro for Spock specifications.
 
     Wraps `specs` in a test-only `groovy_library` with JUnit and Spock
-    pinned on the classpath, then emits a `groovy_test` that runs the
-    Spock specs under the JUnit 4 runner. The Spock jar version is
-    selected by the active toolchain's Groovy major.minor — Groovy 2.5
-    pulls Spock for 2.5, Groovy 4.0 pulls Spock for 4.0.
+    pinned on the classpath, then emits a `groovy_test`. The Spock jar
+    version is selected by the active toolchain's Groovy major.minor —
+    Groovy 2.5 pulls Spock 1.3 (JUnit 4 path), Groovy 3.0 / 4.0 pull Spock
+    2.3 (JUnit 5 Platform path). The launcher invocation auto-routes
+    through `org.junit.runner.JUnitCore` or
+    `org.junit.platform.console.ConsoleLauncher` based on the toolchain's
+    resolved `runner_class`; the macro itself stays signature-stable.
 
     Args:
       name: A unique name for this target.

@@ -80,6 +80,54 @@ explicitly.
 | <a id="groovy_binary-kwargs"></a>kwargs |  Additional arguments forwarded to the underlying `java_binary` (e.g. `jvm_flags`, `visibility`, `data`).   |  none |
 
 
+<a id="groovy_junit5_test"></a>
+
+## groovy_junit5_test
+
+<pre>
+load("@rules_groovy//groovy:groovy.bzl", "groovy_junit5_test")
+
+groovy_junit5_test(<a href="#groovy_junit5_test-name">name</a>, <a href="#groovy_junit5_test-tests">tests</a>, <a href="#groovy_junit5_test-deps">deps</a>, <a href="#groovy_junit5_test-groovy_srcs">groovy_srcs</a>, <a href="#groovy_junit5_test-java_srcs">java_srcs</a>, <a href="#groovy_junit5_test-data">data</a>, <a href="#groovy_junit5_test-resources">resources</a>, <a href="#groovy_junit5_test-jvm_flags">jvm_flags</a>, <a href="#groovy_junit5_test-size">size</a>,
+                   <a href="#groovy_junit5_test-tags">tags</a>, <a href="#groovy_junit5_test-src_roots">src_roots</a>)
+</pre>
+
+Convenience macro for JUnit 5 (Jupiter)-driven Groovy tests.
+
+Mirrors `groovy_junit_test`'s signature but wires the compile classpath
+against JUnit 5 Jupiter (`@groovy_artifacts//:junit_api`) and lets the
+test rule pick up the full JUnit 5 Platform runtime (jupiter-engine,
+platform-launcher / engine / commons, opentest4j, apiguardian-api) from
+the active toolchain's `dep_providers` — no literal `@junit_artifact`
+refs in this path. The launcher invocation routes through
+`org.junit.platform.console.ConsoleLauncher` because the active
+toolchain's `runner_class` is set to ConsoleLauncher whenever the
+module extension resolved a JUnit 5 testing flavor.
+
+Wiring this on top of a JUnit-4-only toolchain fails at runtime
+(ConsoleLauncher isn't on the classpath). Either declare
+`groovy.testing(junit = "5")` in your `MODULE.bazel`, or accept the
+Groovy-4 default which auto-promotes to JUnit 5 because Spock 2.x
+requires it.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="groovy_junit5_test-name"></a>name |  A unique name for this target.   |  none |
+| <a id="groovy_junit5_test-tests"></a>tests |  `.groovy` files that define JUnit 5 (Jupiter) test classes.   |  none |
+| <a id="groovy_junit5_test-deps"></a>deps |  Libraries on both compile-time and runtime classpath.   |  `[]` |
+| <a id="groovy_junit5_test-groovy_srcs"></a>groovy_srcs |  Additional `.groovy` helper sources compiled into a supporting `groovy_library`.   |  `[]` |
+| <a id="groovy_junit5_test-java_srcs"></a>java_srcs |  Additional `.java` helper sources compiled into a supporting `java_library`.   |  `[]` |
+| <a id="groovy_junit5_test-data"></a>data |  Runtime data files exposed via runfiles.   |  `[]` |
+| <a id="groovy_junit5_test-resources"></a>resources |  Files packaged into a side `java_library` and added to the test classpath.   |  `[]` |
+| <a id="groovy_junit5_test-jvm_flags"></a>jvm_flags |  Flags embedded into the generated test launcher script.   |  `[]` |
+| <a id="groovy_junit5_test-size"></a>size |  Bazel test size. Defaults to `small`.   |  `"small"` |
+| <a id="groovy_junit5_test-tags"></a>tags |  Bazel test tags.   |  `[]` |
+| <a id="groovy_junit5_test-src_roots"></a>src_roots |  Source-root prefixes forwarded to the underlying `groovy_test` for FQCN derivation. Defaults to `["src/test/groovy", "src/test/java"]`.   |  `["src/test/groovy", "src/test/java"]` |
+
+
 <a id="groovy_junit_test"></a>
 
 ## groovy_junit_test
@@ -246,10 +294,13 @@ spock_test(<a href="#spock_test-name">name</a>, <a href="#spock_test-specs">spec
 Convenience macro for Spock specifications.
 
 Wraps `specs` in a test-only `groovy_library` with JUnit and Spock
-pinned on the classpath, then emits a `groovy_test` that runs the
-Spock specs under the JUnit 4 runner. The Spock jar version is
-selected by the active toolchain's Groovy major.minor — Groovy 2.5
-pulls Spock for 2.5, Groovy 4.0 pulls Spock for 4.0.
+pinned on the classpath, then emits a `groovy_test`. The Spock jar
+version is selected by the active toolchain's Groovy major.minor —
+Groovy 2.5 pulls Spock 1.3 (JUnit 4 path), Groovy 3.0 / 4.0 pull Spock
+2.3 (JUnit 5 Platform path). The launcher invocation auto-routes
+through `org.junit.runner.JUnitCore` or
+`org.junit.platform.console.ConsoleLauncher` based on the toolchain's
+resolved `runner_class`; the macro itself stays signature-stable.
 
 
 **PARAMETERS**
