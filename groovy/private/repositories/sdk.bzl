@@ -30,8 +30,7 @@ flavors as interchangeable.
 The SDK is staged WITHOUT strip_prefix: //groovy/private:groovyc_wrapper.sh
 resolves the launcher with the glob `external/*/groovy-*/bin/groovyc`,
 which requires the `groovy-X.Y.Z/` directory to be present at the repo
-root. Chapter 6 (Groovy 4 default + worker) revisits this; for v0.1.0
-the wrapper stays as-is.
+root.
 
 Per-repo reproducibility: when the user pins integrity (the registry
 default path, or an explicit override), `rctx.repo_metadata(reproducible

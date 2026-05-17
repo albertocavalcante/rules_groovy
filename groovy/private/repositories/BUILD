@@ -7,8 +7,25 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 # Package for repository-rule implementations used by the module extension.
-# No build targets here; the .bzl files are loaded directly from
-# //groovy:extensions.bzl. The package exists so Bazel treats this directory
-# as a load-time package.
+# The .bzl files are loaded directly from //groovy:extensions.bzl; the
+# bzl_library targets below exist purely so Stardoc (//docs) can resolve
+# transitive loads during doc extraction.
 
-package(default_visibility = ["//visibility:private"])
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+bzl_library(
+    name = "artifacts_bzl",
+    srcs = ["artifacts.bzl"],
+)
+
+bzl_library(
+    name = "hub_bzl",
+    srcs = ["hub.bzl"],
+)
+
+bzl_library(
+    name = "sdk_bzl",
+    srcs = ["sdk.bzl"],
+)

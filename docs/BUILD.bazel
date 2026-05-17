@@ -1,0 +1,44 @@
+# Stardoc-generated rule reference. The rule docstrings in //groovy/*.bzl
+# are the source of truth; this package emits one markdown file per public
+# .bzl. The generated files are committed alongside the .bzl sources, and
+# CI runs `bazel build //docs:all` + `git diff --exit-code docs/` to fail
+# the PR if the regenerated docs would drift from the committed copies.
+
+load("@stardoc//stardoc:stardoc.bzl", "stardoc")
+
+package(default_visibility = ["//visibility:private"])
+
+# Public rules (groovy_library, groovy_binary, groovy_test, ...).
+stardoc(
+    name = "rules_public_md",
+    out = "rules-public.md",
+    input = "//groovy:groovy.bzl",
+    deps = ["//groovy:groovy_bzl"],
+)
+
+# Toolchain providers and rules (groovy_toolchain, groovy_deps,
+# GroovyToolchainInfo, GroovyDepsInfo).
+stardoc(
+    name = "rules_toolchain_md",
+    out = "rules-toolchain.md",
+    input = "//groovy:toolchain.bzl",
+    deps = ["//groovy:toolchain_bzl"],
+)
+
+# Module extension (groovy.toolchain, groovy.local_toolchain,
+# groovy.testing).
+stardoc(
+    name = "rules_extension_md",
+    out = "rules-extension.md",
+    input = "//groovy:extensions.bzl",
+    deps = ["//groovy:extensions_bzl"],
+)
+
+filegroup(
+    name = "all_docs",
+    srcs = [
+        ":rules-public.md",
+        ":rules-toolchain.md",
+        ":rules-extension.md",
+    ],
+)
