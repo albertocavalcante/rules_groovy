@@ -7,8 +7,23 @@ module(
 )
 
 bazel_dep(name = "rules_java", version = "9.6.1")
+
+# rules_shell is needed because the static default toolchain at
+# //groovy/private/default_toolchain wraps `bin/groovyc` (an Apache Groovy
+# launcher shell script) as a sh_binary so the toolchain rule's
+# `groovyc = attr.label(executable = True, cfg = "exec")` resolves cleanly.
+# Chapter 5 replaces the static default toolchain with module-extension-
+# driven registration; rules_shell remains needed to wrap the launcher.
+bazel_dep(name = "rules_shell", version = "0.6.1")
 bazel_dep(name = "bazel_skylib", version = "1.8.2", dev_dependency = True)
 
 # Load Groovy SDK and test dependencies via module extension
 groovy = use_extension("//groovy:extensions.bzl", "groovy")
 use_repo(groovy, "groovy_sdk_artifact", "junit_artifact", "spock_artifact")
+
+# Chapter 4 of the v0.1.0 release narrative: register a static default
+# groovy_toolchain so the rewritten rules in groovy.bzl (which now require
+# toolchain resolution via //groovy:toolchain_type) keep building the
+# example tree. Chapter 5 deletes //groovy/private/default_toolchain and
+# replaces it with module-extension-generated registration.
+register_toolchains("@rules_groovy//groovy/private/default_toolchain:groovy_default_toolchain")

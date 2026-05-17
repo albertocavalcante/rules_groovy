@@ -36,11 +36,37 @@ _GROOVY_SHA256 = "49fb14b98f9fed1744781e4383cf8bff76440032f58eb5fabdc9e67a5daa87
 
 _GROOVY_BUILD_FILE = """
 load("@rules_java//java:defs.bzl", "java_import")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
 filegroup(
     name = "sdk",
     srcs = glob(["groovy-2.5.8/**"]),
     visibility = ["//visibility:public"],
 )
+
+# Bazel-executable wrapper around the upstream Apache Groovy launcher
+# (`bin/groovyc`, a POSIX shell script that execs java + FileSystemCompiler).
+# The wrapper additionally expands `@argfile` before delegating because Groovy
+# 2.5.x's FileSystemCompiler does NOT understand argument files natively
+# (Groovy 3.0+ does — chapter 6 makes 4.0.x the default and the wrapper becomes
+# a pass-through). Argument-file expansion preserves the "param files always"
+# hermeticity rule (ISSUE-050) for unbounded classpaths.
+#
+# The wrapper script source is checked in at
+# //groovy/private:groovyc_wrapper.sh and pulled in via a label here.
+sh_binary(
+    name = "groovyc",
+    srcs = ["@rules_groovy//groovy/private:groovyc_wrapper.sh"],
+    data = [":sdk"],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "runtime_jar",
+    srcs = ["groovy-2.5.8/lib/groovy-2.5.8.jar"],
+    visibility = ["//visibility:public"],
+)
+
 java_import(
     name = "groovy",
     jars = ["groovy-2.5.8/lib/groovy-2.5.8.jar"],
