@@ -1,3 +1,8 @@
 common --enable_bzlmod
 
+# Bazel 9 has bzlmod on by default. `--config=bzlmod` is kept as a
+# no-op alias so the CI workflow's legacy invocation continues to
+# work and users on Bazel 7/8 can opt in explicitly.
+common:bzlmod --enable_bzlmod
+
 build --java_runtime_version=remotejdk_11

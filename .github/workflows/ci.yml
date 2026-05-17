@@ -10,16 +10,34 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Per rules_groovy-plan/decisions/ADR-005-bazel-9-baseline.md:
+# Bazel 9.x is the supported baseline (required, blocks merges).
+# Bazel 7.x and 8.x cells are advisory — they run on every PR for
+# regression signal but don't gate merges. Bazel 9 removed WORKSPACE,
+# so no Bazel-9 x WORKSPACE cells.
+
 jobs:
   build:
-    name: ${{ matrix.mode }} / ${{ matrix.os }} / Bazel ${{ matrix.bazel-version }}
+    name: "${{ matrix.mode }} / ${{ matrix.os }} / Bazel ${{ matrix.bazel-version }}${{ matrix.advisory && ' (advisory)' || '' }}"
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.advisory }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        bazel-version: ['7.x', '8.x']
-        mode: [workspace, bzlmod]
+        include:
+          # Required: Bazel 9 + bzlmod (the supported baseline).
+          - { os: ubuntu-latest, bazel-version: '9.x', mode: bzlmod, advisory: false }
+          - { os: macos-latest,  bazel-version: '9.x', mode: bzlmod, advisory: false }
+          # Advisory: older Bazel + bzlmod.
+          - { os: ubuntu-latest, bazel-version: '8.x', mode: bzlmod, advisory: true }
+          - { os: macos-latest,  bazel-version: '8.x', mode: bzlmod, advisory: true }
+          - { os: ubuntu-latest, bazel-version: '7.x', mode: bzlmod, advisory: true }
+          - { os: macos-latest,  bazel-version: '7.x', mode: bzlmod, advisory: true }
+          # Advisory: WORKSPACE on Bazel 7/8 (Bazel 9 removed WORKSPACE).
+          - { os: ubuntu-latest, bazel-version: '8.x', mode: workspace, advisory: true }
+          - { os: macos-latest,  bazel-version: '8.x', mode: workspace, advisory: true }
+          - { os: ubuntu-latest, bazel-version: '7.x', mode: workspace, advisory: true }
+          - { os: macos-latest,  bazel-version: '7.x', mode: workspace, advisory: true }
 
     steps:
       - name: Checkout
