@@ -15,12 +15,5 @@ groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
 # to JUnit 5 because Spock 2.x requires it.
 groovy.toolchain(version = "2.5.23")
 
-use_repo(
-    groovy,
-    "groovy_sdk",
-    "junit_artifact",
-    "spock_artifact",
-    "groovy_toolchains",
-    "groovy_artifacts",
-)
+use_repo(groovy, "groovy_toolchains")
 register_toolchains("@groovy_toolchains//:all")

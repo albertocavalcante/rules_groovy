@@ -83,6 +83,49 @@ def _deps_classpath(deps):
             ])
     return depset(non_java_files, transitive = java_info_jars)
 
+def _toolchain_dep_provider_jars(ctx):
+    """Every `GroovyDepsInfo.java_info.transitive_runtime_jars` from the toolchain.
+
+    The module extension wires JUnit / Spock / Jupiter / Platform jars on
+    the toolchain as `groovy_deps(dep_name = "junit_runner", ...)` etc.
+    Folding them into both compile and runtime classpaths means
+    `groovy_junit_test`, `groovy_junit5_test`, and `spock_test` no longer
+    need to add literal `@junit_artifact` / `@spock_artifact` labels to
+    their generated `groovy_library`'s `deps` — the toolchain owns the
+    wiring (ISSUE-061).
+
+    The cost on a non-test `groovy_library` compile is some extra jars on
+    the compile classpath; JVM compilation is order-independent and
+    unused jars do not affect output. The benefit is the test-macro
+    surface stays free of hardcoded compat-repo labels.
+    """
+    transitive = []
+    for dep in ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].deps:
+        if dep.java_info != None:
+            transitive.append(dep.java_info.transitive_runtime_jars)
+    return depset(transitive = transitive)
+
+def toolchain_deps_by_name(ctx, names):
+    """Pick `GroovyDepsInfo` bundles off the toolchain by logical name.
+
+    Returns a list of `JavaInfo` in the same order as `names`. Fails with
+    a clear message if any requested name is not wired on the resolved
+    toolchain (e.g. asking for `"junit_api"` on a JUnit-4 toolchain).
+
+    Useful for rules that need a specific subset of the toolchain's test
+    framework deps (vs. consuming the whole set via
+    `_toolchain_dep_provider_jars`).
+    """
+    deps_info_list = ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].deps
+    by_name = {info.name: info.java_info for info in deps_info_list}
+    missing = [n for n in names if n not in by_name]
+    if missing:
+        fail("Toolchain missing required dep_providers: {} (have: {})".format(
+            missing,
+            sorted(by_name.keys()),
+        ))
+    return [by_name[n] for n in names]
+
 def compile_groovy(ctx, srcs, deps, output_jar):
     """Compile `.groovy` (and optionally `.java`) sources to a deterministic JAR.
 
@@ -106,7 +149,20 @@ def compile_groovy(ctx, srcs, deps, output_jar):
     java_runtime = _java_runtime(ctx)
     singlejar = _java_toolchain(ctx).single_jar
 
-    classpath = _deps_classpath(deps)
+    # Compile classpath includes:
+    #   * Caller-supplied deps (transitive runtime jars / bare .jar files).
+    #   * Every `GroovyDepsInfo` reachable from the toolchain (JUnit /
+    #     Spock / Jupiter / Platform jars). Folding the toolchain
+    #     test-framework jars in unconditionally means the test-rule
+    #     macros (`groovy_junit_test`, `groovy_junit5_test`, `spock_test`)
+    #     no longer need to thread `@junit_artifact` / `@spock_artifact`
+    #     labels through to the generated `groovy_library`'s deps —
+    #     ISSUE-061. The cost is some unused jars on a non-test
+    #     groovy_library's compile classpath; JVM compilation is
+    #     order-independent and unused jars do not affect output.
+    classpath = depset(
+        transitive = [_deps_classpath(deps), _toolchain_dep_provider_jars(ctx)],
+    )
     raw_jar = ctx.actions.declare_file(ctx.label.name + "_classes.jar")
 
     # 1) groovyc → raw_jar

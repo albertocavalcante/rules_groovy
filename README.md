@@ -14,18 +14,11 @@ Add to your `MODULE.bazel`:
 bazel_dep(name = "rules_groovy", version = "0.1.0")
 
 groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
-use_repo(
-    groovy,
-    "groovy_sdk_artifact",
-    "junit_artifact",
-    "spock_artifact",
-    "groovy_toolchains",
-    "groovy_artifacts",
-)
+use_repo(groovy, "groovy_toolchains")
 register_toolchains("@groovy_toolchains//:all")
 ```
 
-Groovy 4.0.x is the default; JUnit 5 (via the Spock-2-on-Groovy-4 auto-promotion path) and Spock 2.x are wired automatically. WORKSPACE is not supported; Bazel 9.0+ is required. The `use_repo` list will collapse to just `groovy_toolchains` in a follow-up that routes JUnit/Spock through the toolchain's `dep_providers` instead of literal repo labels (ISSUE-061).
+Groovy 4.0.x is the default; JUnit 5 (via the Spock-2-on-Groovy-4 auto-promotion path) and Spock 2.x are wired automatically. WORKSPACE is not supported; Bazel 9.0+ is required.
 
 ## What's distinctive
 
@@ -64,12 +57,12 @@ groovy_binary(
 )
 ```
 
-A mixed Groovy + Java library:
+A mixed Groovy + Java library — `groovy_library` accepts both source extensions natively via groovyc joint compilation:
 
 ```python
-load("@rules_groovy//groovy:groovy.bzl", "groovy_and_java_library")
+load("@rules_groovy//groovy:groovy.bzl", "groovy_library")
 
-groovy_and_java_library(
+groovy_library(
     name = "lib",
     srcs = glob(["*.groovy", "*.java"]),
 )

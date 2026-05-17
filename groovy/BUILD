@@ -17,6 +17,7 @@ bzl_library(
     srcs = ["groovy.bzl"],
     deps = [
         ":rules_java_bzl",
+        ":toolchain_bzl",
         "//groovy/private:actions_bzl",
     ],
 )
