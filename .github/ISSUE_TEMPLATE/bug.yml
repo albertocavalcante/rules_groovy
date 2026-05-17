@@ -1,0 +1,107 @@
+name: Bug report
+description: Report a defect in rules_groovy.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, please skim:
+
+        - [`docs/rules-public.md`](../blob/main/docs/rules-public.md),
+          [`docs/rules-toolchain.md`](../blob/main/docs/rules-toolchain.md),
+          and [`docs/rules-extension.md`](../blob/main/docs/rules-extension.md)
+          for the current rule and tag-class signatures.
+        - [`CHANGELOG.md`](../blob/main/CHANGELOG.md) — the issue may already
+          be fixed on `main` or noted under `[Unreleased]`.
+
+        Minimal reproductions are the fastest path to a fix.
+
+  - type: dropdown
+    id: bazel-version
+    attributes:
+      label: Bazel version
+      options:
+        - "9.x"
+        - "8.x"
+        - "7.x"
+        - other (specify in repro)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - linux-x86_64
+        - linux-aarch64
+        - macos-arm64
+        - macos-x86_64
+        - other (specify in repro)
+    validations:
+      required: true
+
+  - type: input
+    id: jdk-version
+    attributes:
+      label: JDK version
+      description: Output of `java -version` (or the toolchain Bazel resolved).
+      placeholder: "e.g. Temurin 21.0.4"
+    validations:
+      required: true
+
+  - type: input
+    id: groovy-version
+    attributes:
+      label: Groovy version
+      description: Default is 4.0.32. If pinned, paste the `groovy.toolchain(version = ...)` value.
+      placeholder: "4.0.32 (default)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Repro steps
+      description: Smallest commands and files that reproduce the issue.
+      placeholder: |
+        1. `git clone ...`
+        2. `bazel test //...`
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the relevant Bazel output. A failing-action stderr block is usually enough.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: module-bazel
+    attributes:
+      label: MODULE.bazel excerpt (optional)
+      description: The `bazel_dep`, `use_extension`, and `groovy.toolchain` / `groovy.testing` tags relevant to the failure.
+      render: python
+    validations:
+      required: false
+
+  - type: textarea
+    id: build-file
+    attributes:
+      label: BUILD excerpt (optional)
+      description: The failing target's BUILD stanza.
+      render: python
+    validations:
+      required: false
