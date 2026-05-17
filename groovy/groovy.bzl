@@ -13,18 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Public Groovy rules.
+"""Public Groovy build rules.
 
-Chapter 4 of the v0.1.0 release narrative rewrites the rule implementations
-to consume the toolchain plumbing landed in chapter 3 via the helpers in
-`//groovy/private:actions.bzl`. Macro signatures (`groovy_library`,
+This file defines the user-facing macros — `groovy_library`,
 `groovy_and_java_library`, `groovy_binary`, `groovy_test`,
-`groovy_junit_test`, `spock_test`) remain unchanged so existing example
-trees and downstream BUILD files keep working without edits.
+`groovy_junit_test`, and `spock_test` — plus the underlying rules that
+implement them. All actions are hermetic and resolved through the
+toolchain registered by the `groovy` module extension (see
+`extensions.bzl`).
 
-Hermeticity wins absorbed here — see notes/design-hermetic.md and
-decisions/ADR-005-bazel-9-baseline.md — issues 001, 002, 003, 040, 041,
-042, 050, 051.
+Macro signatures preserve source-level compatibility with upstream
+`bazelbuild/rules_groovy 0.0.6`; downstream BUILD files keep working
+without edits.
 """
 
 load("@rules_java//java:defs.bzl", "JavaInfo", "java_binary", "java_import", "java_library")
@@ -73,9 +73,24 @@ _groovy_jar = rule(
 # ---------------------------------------------------------------------------
 
 def groovy_library(name, srcs = [], testonly = 0, deps = [], **kwargs):
-    """Rule analogous to java_library that accepts .groovy sources instead of
-    .java sources. The result is wrapped in a java_import so that java rules
-    may depend on it.
+    """Builds a Groovy library jar.
+
+    Analogous to `java_library`, but accepts `.groovy` sources instead of
+    `.java`. The compiled jar is wrapped in a `java_import` so that Java
+    rules can depend on it transparently — `java_library`, `java_binary`,
+    and `java_test` all consume `groovy_library` targets via their `deps`
+    attribute.
+
+    Args:
+      name: A unique name for this target.
+      srcs: List of `.groovy` source files to compile.
+      testonly: If `1`, the resulting `java_import` is testonly; only
+        other testonly targets may depend on it. Defaults to `0`.
+      deps: List of libraries or raw `.jar` files on the compile-time
+        classpath. Accepts `groovy_library`, `java_library`,
+        `groovy_and_java_library`, and `.jar` labels.
+      **kwargs: Additional arguments forwarded to the wrapping
+        `java_import` (e.g. `visibility`, `tags`, `runtime_deps`).
     """
     _groovy_jar(
         name = name + "-impl",
@@ -92,9 +107,27 @@ def groovy_library(name, srcs = [], testonly = 0, deps = [], **kwargs):
     )
 
 def groovy_and_java_library(name, srcs = [], testonly = 0, deps = [], **kwargs):
-    """Accepts .groovy and .java srcs to create a groovy_library and a
-    java_library. The groovy_library will depend on the java_library, so the
-    Groovy code may reference the Java code but not vice-versa.
+    """Builds a mixed Groovy + Java library from a single source list.
+
+    Splits `srcs` by extension into a `java_library` (`.java` files) and a
+    Groovy compile (`.groovy` files), then bundles both into one
+    `java_import`. The Groovy side depends on the Java side, so Groovy
+    code may reference Java types but not vice-versa.
+
+    Use this rule when Groovy and Java sources are tightly coupled and
+    you don't want to maintain two BUILD targets by hand. For looser
+    coupling, prefer two separate targets — one `groovy_library`, one
+    `java_library` — with an explicit `deps` edge.
+
+    Args:
+      name: A unique name for this target.
+      srcs: List of `.groovy` and `.java` source files.
+      testonly: If `1`, the resulting `java_import` is testonly. Defaults
+        to `0`.
+      deps: List of libraries or raw `.jar` files on the compile-time
+        classpath of both sub-libraries.
+      **kwargs: Additional arguments forwarded to the wrapping
+        `java_import`.
     """
     groovy_deps = deps
     jars = []
@@ -132,8 +165,25 @@ def groovy_and_java_library(name, srcs = [], testonly = 0, deps = [], **kwargs):
     )
 
 def groovy_binary(name, main_class, srcs = [], testonly = 0, deps = [], **kwargs):
-    """Rule analogous to java_binary that accepts .groovy sources instead of
-    .java sources.
+    """Builds an executable Groovy application.
+
+    Analogous to `java_binary` but accepts `.groovy` sources. Produces a
+    runnable target you can launch with `bazel run`. The Groovy runtime
+    jar resolved by the active toolchain is added to `runtime_deps`
+    automatically, so users don't have to depend on `@groovy_sdk_artifact`
+    explicitly.
+
+    Args:
+      name: A unique name for this target.
+      main_class: Fully-qualified name of the entry-point class, or the
+        name of a Groovy script class. See the
+        [Groovy docs on scripts vs. classes](https://www.groovy-lang.org/structure.html#_scripts_versus_classes).
+      srcs: List of `.groovy` source files compiled into the binary. May
+        be empty if `deps` already provides the entry point.
+      testonly: If `1`, the binary is testonly. Defaults to `0`.
+      deps: Libraries on both the compile-time and runtime classpath.
+      **kwargs: Additional arguments forwarded to the underlying
+        `java_binary` (e.g. `jvm_flags`, `visibility`, `data`).
     """
     all_deps = deps + ["@groovy_sdk_artifact//:groovy"]
     if srcs:
@@ -194,8 +244,9 @@ def path_to_class(path):
 
 def _groovy_test_impl(ctx):
     # Resolve the runtime classpath off the toolchain + caller-supplied deps.
-    # Chapter 5 routes JUnit/Spock through `dep_providers`; until then they
-    # come through the rule's own `deps` attribute (unchanged from upstream).
+    # A follow-up routes JUnit/Spock through the toolchain's `dep_providers`;
+    # until then they come through the rule's own `deps` attribute (unchanged
+    # from upstream).
     classpath = test_runtime_classpath(ctx, ctx.attr.deps + ctx.attr._implicit_deps)
     classes = [path_to_class(src.path) for src in ctx.files.srcs]
 
@@ -204,9 +255,9 @@ def _groovy_test_impl(ctx):
         classpath = classpath,
         classes = classes,
         jvm_flags = ctx.attr.jvm_flags,
-        # Hard-coded JUnit 4 runner FQCN matches the upstream behavior; the
-        # `groovy.testing(junit = "5")` tag class (chapter 5 / ISSUE-047) will
-        # plumb the runner class through the toolchain so JUnit 5 works.
+        # Hard-coded JUnit 4 runner FQCN matches the upstream behavior; a
+        # later iteration plumbs the runner class through the toolchain so
+        # JUnit 5 works as a `groovy.testing(junit = "5")` switch.
         runner_class = "org.junit.runner.JUnitCore",
     )
 
@@ -254,6 +305,32 @@ def groovy_test(
         jvm_flags = [],
         size = "medium",
         tags = []):
+    """Runs Groovy tests under JUnit 4 (`JUnitCore`).
+
+    Source filenames are converted to fully-qualified class names via
+    `path_to_class`, which requires sources to live under
+    `src/test/groovy/...` or `src/test/java/...`. Each derived class is
+    passed to `org.junit.runner.JUnitCore` at execution time.
+
+    For convenience wrappers around JUnit/Spock that also handle library
+    splitting, see `groovy_junit_test` and `spock_test`.
+
+    Args:
+      name: A unique name for this target.
+      deps: Libraries on both compile-time and runtime classpath.
+        Accepts `groovy_library`, `java_library`,
+        `groovy_and_java_library`, and `.jar` labels.
+      srcs: List of `.groovy` source files whose names map to JUnit test
+        classes.
+      data: Runtime data files made available via Bazel runfiles.
+      resources: Files packaged into a side `java_library` and added to
+        the test classpath (useful for classpath-resource lookups).
+      jvm_flags: Flags embedded into the generated test launcher script.
+      size: Bazel test size — `small`, `medium`, `large`, or `enormous`.
+        Defaults to `medium`.
+      tags: Bazel test tags (e.g. `manual`, `requires-network`).
+    """
+
     # Create an extra jar to hold the resource files if any were specified
     all_deps = deps
     if resources:
@@ -285,6 +362,31 @@ def groovy_junit_test(
         jvm_flags = [],
         size = "small",
         tags = []):
+    """Convenience macro for JUnit-driven Groovy tests with helper sources.
+
+    Splits inputs into a test-only library + a `groovy_test` target. Use
+    this when your tests share helper Groovy or Java types that aren't
+    themselves test specifications.
+
+    `tests` are the JUnit-runnable specs; `groovy_srcs` and `java_srcs`
+    are compiled into supporting libraries on the test classpath.
+
+    Args:
+      name: A unique name for this target.
+      tests: `.groovy` files that define JUnit test classes (the
+        runnable specs).
+      deps: Libraries on both compile-time and runtime classpath.
+      groovy_srcs: Additional `.groovy` helper sources compiled into a
+        supporting `groovy_library`.
+      java_srcs: Additional `.java` helper sources compiled into a
+        supporting `java_library`.
+      data: Runtime data files exposed via runfiles.
+      resources: Files packaged into a side `java_library` and added to
+        the test classpath.
+      jvm_flags: Flags embedded into the generated test launcher script.
+      size: Bazel test size. Defaults to `small`.
+      tags: Bazel test tags.
+    """
     groovy_lib_deps = deps + ["@junit_artifact//jar"]
     test_deps = deps + ["@junit_artifact//jar"]
 
@@ -334,6 +436,29 @@ def spock_test(
         jvm_flags = [],
         size = "small",
         tags = []):
+    """Convenience macro for Spock specifications.
+
+    Wraps `specs` in a test-only `groovy_library` with JUnit and Spock
+    pinned on the classpath, then emits a `groovy_test` that runs the
+    Spock specs under the JUnit 4 runner. The Spock jar version is
+    selected by the active toolchain's Groovy major.minor — Groovy 2.5
+    pulls Spock for 2.5, Groovy 4.0 pulls Spock for 4.0.
+
+    Args:
+      name: A unique name for this target.
+      specs: `.groovy` files defining Spock specifications.
+      deps: Libraries on both compile-time and runtime classpath.
+      groovy_srcs: Additional `.groovy` helper sources compiled into a
+        supporting `groovy_library`.
+      java_srcs: Additional `.java` helper sources compiled into a
+        supporting `java_library`.
+      data: Runtime data files exposed via runfiles.
+      resources: Files packaged into a side `java_library` and added to
+        the test classpath.
+      jvm_flags: Flags embedded into the generated test launcher script.
+      size: Bazel test size. Defaults to `small`.
+      tags: Bazel test tags.
+    """
     groovy_lib_deps = deps + [
         "@junit_artifact//jar",
         "@spock_artifact//jar",

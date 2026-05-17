@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Analysistest coverage for chapter 3 of the v0.1.0 release narrative.
+"""Analysistest coverage for `groovy_toolchain` and `groovy_deps`.
 
 Three cases:
 
@@ -25,8 +25,7 @@ Three cases:
     provide `GroovyDepsInfo` (compile-time check via
     `providers = [[GroovyDepsInfo]]` on the rule attr).
 
-Chapter 4 will add action-level tests once the toolchain is wired into
-`compile_groovy`.
+Action-level tests over `compile_groovy` are a follow-up.
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")

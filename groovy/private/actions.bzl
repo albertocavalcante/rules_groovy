@@ -14,11 +14,11 @@
 
 """Hermetic compile and test-launcher actions for Groovy.
 
-Chapter 4 of the v0.1.0 release narrative. Replaces `_groovy_jar`'s
-`ctx.actions.run_shell` + label-pinned SDK with toolchain-resolved
-`ctx.actions.run` actions.
+`compile_groovy` and the test-launcher helpers replace the upstream
+`_groovy_jar`'s `ctx.actions.run_shell` + label-pinned SDK with
+toolchain-resolved `ctx.actions.run` actions.
 
-Hermeticity checkpoints (see decisions/ADR-005, notes/design-hermetic.md):
+Hermeticity checkpoints:
 
   * No `ctx.actions.run_shell` for compile actions.
   * No `use_default_shell_env = True` anywhere.
@@ -27,7 +27,7 @@ Hermeticity checkpoints (see decisions/ADR-005, notes/design-hermetic.md):
   * Param files always (`ctx.actions.args().use_param_file(..., use_always = True)`).
   * Packaging via `singlejar` from `rules_java`'s Java toolchain
     (`--add_missing_directories` gives directory entries in the output jar,
-    fixing upstream ISSUE-051 / rules_groovy#52, #61).
+    matching `java_library` parity for `ClassLoader.getResource("pkg/")`).
   * Mnemonics on every action (`Groovyc`, `GroovySingleJar`).
 
 The functions exposed here are consumed by `groovy/groovy.bzl`'s public rules.

@@ -46,3 +46,39 @@ jobs:
         run: bazel build --config=bzlmod //...
         env:
           USE_BAZEL_VERSION: ${{ matrix.bazel-version }}
+
+  docs-regen-check:
+    # Chapter 8 of the v0.1.0 release narrative: rule docstrings in
+    # //groovy/*.bzl are the source of truth. //docs runs Stardoc to
+    # emit one markdown file per public .bzl; the generated files are
+    # committed under docs/. This job regenerates them and fails the
+    # PR if the committed copy diverged from what Stardoc would emit.
+    name: docs regen check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bazelisk
+        uses: bazelbuild/setup-bazelisk@v3
+        env:
+          USE_BAZEL_VERSION: '9.x'
+
+      - name: Regenerate docs
+        run: |
+          bazel build //docs:all
+          # Stardoc outputs land in bazel-bin/docs/. Overwrite the
+          # committed copies under docs/ and let `git diff` decide.
+          cp bazel-bin/docs/rules-public.md docs/rules-public.md
+          cp bazel-bin/docs/rules-toolchain.md docs/rules-toolchain.md
+          cp bazel-bin/docs/rules-extension.md docs/rules-extension.md
+        env:
+          USE_BAZEL_VERSION: '9.x'
+
+      - name: Verify docs are up to date
+        run: |
+          if ! git diff --exit-code docs/; then
+            echo "::error::Stardoc output diverged from the committed copies under docs/."
+            echo "Run 'bazel build //docs:all' locally and copy the outputs from bazel-bin/docs/."
+            exit 1
+          fi

@@ -27,7 +27,7 @@ Per spec the hub BUILD file contains, for each registered SDK:
     where user `*_label` overrides land. The `groovy_toolchain` rule
     never learns of the override; it only sees a `groovy_deps` target
     with the right logical `dep_name`. That's the architectural payoff
-    of chapter 3's dep_providers indirection.
+    of the `dep_providers` indirection on the toolchain rule.
   * one `groovy_toolchain(...)` pointing at the SDK repo's `:groovyc`,
     `:sdk`, `:runtime_jar`.
   * one `toolchain(...)` declaration registering the above against

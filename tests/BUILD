@@ -15,8 +15,8 @@ java_binary(
     runtime_deps = [":fake_junit"],
 )
 
-# Stand-in for the SDK contents. A single empty file is enough at analysis
-# time; chapter 4 wires real SDK contents through.
+# Stand-in for the SDK contents. A single empty file is enough at
+# analysis time — these tests don't execute the compile action.
 filegroup(
     name = "fake_sdk",
     srcs = ["fake_sdk_marker.txt"],

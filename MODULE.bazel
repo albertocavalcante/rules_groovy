@@ -15,6 +15,13 @@ bazel_dep(name = "rules_java", version = "9.6.1")
 bazel_dep(name = "rules_shell", version = "0.6.1")
 bazel_dep(name = "bazel_skylib", version = "1.8.2", dev_dependency = True)
 
+# Stardoc generates the rule reference under //docs from the public .bzl
+# docstrings. Chapter 8 of the v0.1.0 release narrative: rule docstrings
+# are the source of truth, docs/rules-*.md is committed output, and CI
+# fails the PR if the regenerated docs diverge from the committed copy.
+# `dev_dependency = True` keeps Stardoc out of downstream module graphs.
+bazel_dep(name = "stardoc", version = "0.8.1", dev_dependency = True)
+
 # Chapter 5 of the v0.1.0 release narrative: the module extension owns
 # the user-facing API. Three tag classes (`groovy.toolchain`,
 # `groovy.local_toolchain`, `groovy.testing`) plus implicit defaults

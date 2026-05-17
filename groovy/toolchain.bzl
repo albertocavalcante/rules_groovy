@@ -32,8 +32,8 @@ The toolchain type is declared in `groovy/BUILD` as
 
 Compile / test actions read `ctx.toolchains["//groovy:toolchain_type"]` and
 pull `GroovyToolchainInfo` off the `groovy_info` field; deps come off the
-`deps` list and are matched by `GroovyDepsInfo.name`. Chapter 4 wires the
-actions; this file only defines the shape.
+`deps` list and are matched by `GroovyDepsInfo.name`. This file only defines
+the shape; the action wiring lives in `groovy/private/actions.bzl`.
 """
 
 load("@rules_java//java:defs.bzl", "JavaInfo")
