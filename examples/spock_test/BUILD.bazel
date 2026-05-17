@@ -1,0 +1,15 @@
+load("@rules_groovy//groovy:groovy.bzl", "groovy_library", "spock_test")
+
+groovy_library(
+    name = "calc",
+    srcs = ["src/main/groovy/calc/Calc.groovy"],
+)
+
+# Spock 2.x (matched to Groovy 4.0 by the extension) runs on the JUnit
+# Platform; the toolchain's `runner_class` resolves to
+# `org.junit.platform.console.ConsoleLauncher` automatically.
+spock_test(
+    name = "CalcSpec",
+    specs = ["src/test/groovy/calc/CalcSpec.groovy"],
+    deps = [":calc"],
+)

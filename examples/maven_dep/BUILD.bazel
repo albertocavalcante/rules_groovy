@@ -1,0 +1,22 @@
+load("@rules_groovy//groovy:groovy.bzl", "groovy_junit5_test", "groovy_library")
+
+# Consume Guava from a Groovy source. Verifies that arbitrary Maven
+# artifacts resolved via rules_jvm_external compose cleanly with a
+# `groovy_library`'s deps list.
+groovy_library(
+    name = "joiner",
+    srcs = ["src/main/groovy/strings/Joiner.groovy"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+groovy_junit5_test(
+    name = "JoinerTest",
+    tests = ["src/test/groovy/strings/JoinerTest.groovy"],
+    deps = [
+        ":joiner",
+        "@maven//:com_google_guava_guava",
+    ],
+)

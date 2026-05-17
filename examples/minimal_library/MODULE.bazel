@@ -1,0 +1,11 @@
+module(name = "rules_groovy_example_minimal_library", version = "0.0.0")
+
+bazel_dep(name = "rules_groovy", version = "0.0.0")
+local_path_override(
+    module_name = "rules_groovy",
+    path = "../..",
+)
+
+groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
+use_repo(groovy, "groovy_sdk_artifact", "junit_artifact", "spock_artifact", "groovy_toolchains")
+register_toolchains("@groovy_toolchains//:all")

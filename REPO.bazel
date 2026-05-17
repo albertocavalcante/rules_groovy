@@ -1,0 +1,6 @@
+# Repo-wide defaults for rules_groovy. Read by Bazel 7+ at the workspace
+# root; the moral successor to a handful of WORKSPACE settings the
+# bzlmod migration left without an obvious home.
+repo(
+    default_visibility = ["//visibility:public"],
+)

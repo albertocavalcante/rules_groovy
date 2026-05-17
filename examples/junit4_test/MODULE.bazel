@@ -1,0 +1,26 @@
+module(name = "rules_groovy_example_junit4_test", version = "0.0.0")
+
+bazel_dep(name = "rules_groovy", version = "0.0.0")
+local_path_override(
+    module_name = "rules_groovy",
+    path = "../..",
+)
+
+groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
+
+# Pin Groovy 2.5.x so the Spock-for-Groovy mapping resolves to Spock 1.3
+# (which runs under JUnit 4, not the JUnit 5 Platform). The point of
+# this example is to exercise the legacy JUnit 4 runner explicitly.
+# Groovy 4.0 + the default extension auto-promotes the testing flavor
+# to JUnit 5 because Spock 2.x requires it.
+groovy.toolchain(version = "2.5.23")
+
+use_repo(
+    groovy,
+    "groovy_sdk",
+    "junit_artifact",
+    "spock_artifact",
+    "groovy_toolchains",
+    "groovy_artifacts",
+)
+register_toolchains("@groovy_toolchains//:all")

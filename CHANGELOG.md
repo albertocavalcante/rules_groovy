@@ -6,7 +6,61 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-(empty)
+### Added
+
+- `examples/` directory: self-contained Bazel modules exercising the
+  ruleset as a downstream consumer. Each subdir's `MODULE.bazel`
+  pulls in `rules_groovy` via `local_path_override` and is built /
+  tested in isolation by the new `examples` CI matrix. The set ships
+  eight examples: `minimal_library`, `stdlib_only_test`,
+  `junit4_test`, `junit5_test`, `spock_test`, `maven_dep`,
+  `mixed_jvm`, `binary`. The ninth slot (`multi_version`) is deferred
+  to ISSUE-064 — the module extension does not yet emit per-toolchain
+  `target_settings` / `config_setting` discriminators, so two
+  `groovy.toolchain` declarations can be registered but only one is
+  reachable. (#20)
+- Root-level `.bazelignore` so `//...` evaluation at the repo root
+  does not recurse into per-example `MODULE.bazel` files. (#20)
+- Root-level `REPO.bazel` declaring `default_visibility =
+  ["//visibility:public"]`. (#20)
+
+### Changed
+
+- `bazel_skylib` is no longer marked `dev_dependency = True` in
+  `MODULE.bazel`. The production BUILD files at `//groovy:BUILD`,
+  `//groovy/private:BUILD`, and `//groovy/private/repositories:BUILD`
+  load `@bazel_skylib//:bzl_library.bzl` at the top level (for the
+  Stardoc `bzl_library` targets); marking the dep `dev_dependency`
+  broke any downstream consumer the moment toolchain resolution
+  touched `@rules_groovy//groovy:toolchain_type`. Caught by the new
+  `examples/` integration tests. (#20)
+- Root `MODULE.bazel`'s `use_repo` on the `groovy` extension dropped
+  `groovy_sdk_artifact` and `spock_artifact`. Those labels are used
+  inside `groovy_binary` and `spock_test` macros that expand in the
+  *calling* repo's namespace; listing them in the rules' own
+  `use_repo` tied this module to the implicit-default extension graph
+  and broke downstream consumers that declared a `groovy.toolchain`
+  or `groovy.testing(spock = False)` tag (verified by the
+  `examples/junit4_test` case). `junit_artifact` and
+  `groovy_toolchains` remain, both load-bearing for the rules' own
+  targets. (#20)
+
+### Removed
+
+- The in-tree `example/` directory and `src/test/groovy/lib/` smoke
+  test. Both shared the rules' own `MODULE.bazel` and therefore could
+  not catch the kind of integration bug `examples/` now catches.
+  Coverage migrated:
+  `example/library_basic/` → `examples/minimal_library/`;
+  `example/junit4/` → `examples/junit4_test/`;
+  `example/spock/` → `examples/spock_test/`;
+  `example/binary/` → `examples/binary/`;
+  `example/mixed_jvm/` → `examples/mixed_jvm/`;
+  `example/multi_version/` (README-only) → ISSUE-064;
+  `example/rules_jvm_external_interop/` (README-only) →
+  `examples/maven_dep/`. The `override_url/` and `local_sdk/`
+  README-only patterns are folded into the relevant new examples'
+  documentation. (#20)
 
 ## [0.1.0] — target
 
