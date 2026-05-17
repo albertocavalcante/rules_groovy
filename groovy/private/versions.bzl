@@ -40,10 +40,13 @@ GROOVY_VERSIONS = {
 }
 
 # Default Groovy version when a user writes `groovy.toolchain()` with no
-# version override. Held at the latest 2.5.x for v0.1.0 to preserve the
-# behavior of the pre-fork ruleset; chapter 6 of the release narrative bumps
-# this to the latest 4.0.x.
-DEFAULT_GROOVY_VERSION = "2.5.23"
+# version override. Bumped to the modern 4.0.x line in chapter 6 of the
+# v0.1.0 release narrative. Users staying on the legacy 2.5.x line pin
+# explicitly: `groovy.toolchain(version = "2.5.23")`. The cascade in
+# `SPOCK_FOR_GROOVY` below picks the matching `spock-core:2.3-groovy-4.0`
+# jar automatically; the implicit `groovy.testing(junit = "4")` default
+# keeps JUnit at 4.13.2.
+DEFAULT_GROOVY_VERSION = "4.0.32"
 
 # JUnit 4 + its single transitive dep, hamcrest-core. Used when a `testing`
 # tag selects `junit = "4"` (the default for Groovy 2.5, paired with Spock 1.3).
