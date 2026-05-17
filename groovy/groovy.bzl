@@ -13,113 +13,69 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_java//java:defs.bzl", "JavaInfo", "java_binary", "java_common", "java_import", "java_library")
+"""Public Groovy rules.
+
+Chapter 4 of the v0.1.0 release narrative rewrites the rule implementations
+to consume the toolchain plumbing landed in chapter 3 via the helpers in
+`//groovy/private:actions.bzl`. Macro signatures (`groovy_library`,
+`groovy_and_java_library`, `groovy_binary`, `groovy_test`,
+`groovy_junit_test`, `spock_test`) remain unchanged so existing example
+trees and downstream BUILD files keep working without edits.
+
+Hermeticity wins absorbed here — see notes/design-hermetic.md and
+decisions/ADR-005-bazel-9-baseline.md — issues 001, 002, 003, 040, 041,
+042, 050, 051.
+"""
+
+load("@rules_java//java:defs.bzl", "JavaInfo", "java_binary", "java_import", "java_library")
+load("//groovy/private:actions.bzl", "REQUIRED_TOOLCHAINS", "compile_groovy", "test_runtime_classpath", "write_test_launcher")
+
+# ---------------------------------------------------------------------------
+# groovy_jar — the underlying compile rule. Produces `libNAME.jar`.
+# Toolchain-resolved, hermetic; no `_zipper`, no `_jdk`, no `_groovysdk`
+# (ISSUE-001, ISSUE-040, ISSUE-041, ISSUE-042).
+# ---------------------------------------------------------------------------
 
 def _groovy_jar_impl(ctx):
-    """Creates a .jar file from Groovy sources. Users should rely on
-    groovy_library instead of using this rule directly.
-    """
-    class_jar = ctx.outputs.class_jar
-    build_output = class_jar.path + ".build_output"
-
-    # Extract all transitive dependencies
-    # TODO(bazel-team): get transitive dependencies from other groovy libraries
-    all_deps = depset(
-        ctx.files.deps,
-        transitive = [
-            dep[JavaInfo].transitive_runtime_jars
-            for dep in ctx.attr.deps
-            if JavaInfo in dep
-        ],
+    compile_groovy(
+        ctx = ctx,
+        srcs = ctx.files.srcs,
+        deps = ctx.attr.deps,
+        output_jar = ctx.outputs.class_jar,
     )
-
-    # Set up the output directory and set JAVA_HOME
-    cmd = "rm -rf %s\n" % build_output
-    cmd += "mkdir -p %s\n" % build_output
-    cmd += "export JAVA_HOME=%s\n" % ctx.attr._jdk[java_common.JavaRuntimeInfo].java_home
-
-    # Set GROOVY_HOME by scanning through the groovy SDK to find the license file,
-    # which should be at the root of the SDK. The name of the license file depends
-    # changed with newer versions of groovy.
-    for file in ctx.files._groovysdk:
-        if file.basename == "CLI-LICENSE.txt" or file.basename == "LICENSE":
-            cmd += "export GROOVY_HOME=%s\n" % file.dirname
-            break
-
-    # Compile all files in srcs with groovyc
-    cmd += "$GROOVY_HOME/bin/groovyc %s -d %s %s\n" % (
-        "-cp " + ":".join([dep.path for dep in all_deps.to_list()]) if len(all_deps.to_list()) != 0 else "",
-        build_output,
-        " ".join([src.path for src in ctx.files.srcs]),
-    )
-
-    # Discover all of the generated class files and write their paths to a file.
-    # Run the paths through sed to trim out everything before the package root so
-    # that the paths match how they should look in the jar file.
-    cmd += "find %s -name '*.class' | sed 's:^%s/::' > %s/class_list\n" % (
-        build_output,
-        build_output,
-        build_output,
-    )
-
-    # Create a jar file using the discovered paths
-    cmd += "root=`pwd`\n"
-    cmd += "cd %s; $root/%s Cc ../%s @class_list\n" % (
-        build_output,
-        ctx.executable._zipper.path,
-        class_jar.basename,
-    )
-    cmd += "cd $root\n"
-
-    # Clean up temporary output
-    cmd += "rm -rf %s" % build_output
-
-    # Execute the command
-    ctx.actions.run_shell(
-        inputs = (
-            ctx.files.srcs +
-            all_deps.to_list() + ctx.files._groovysdk + ctx.files._jdk
-        ),
-        tools = ctx.files._zipper,
-        outputs = [class_jar],
-        mnemonic = "Groovyc",
-        command = "set -e;" + cmd,
-        use_default_shell_env = True,
-    )
+    return [DefaultInfo(files = depset([ctx.outputs.class_jar]))]
 
 _groovy_jar = rule(
+    implementation = _groovy_jar_impl,
     attrs = {
         "srcs": attr.label_list(
             allow_empty = False,
-            allow_files = [".groovy"],
+            # `.java` is allowed here because groovyc accepts mixed-source
+            # compilation (Groovy ↔ Java cross-references). `groovy_library`
+            # passes only `.groovy`; `groovy_and_java_library` partitions and
+            # routes `.java` through `java_library` instead.
+            allow_files = [".groovy", ".java"],
         ),
         "deps": attr.label_list(
-            mandatory = False,
             allow_files = [".jar"],
-        ),
-        "_groovysdk": attr.label(
-            default = Label("@groovy_sdk_artifact//:sdk"),
-        ),
-        "_jdk": attr.label(
-            default = Label("@bazel_tools//tools/jdk:current_java_runtime"),
-        ),
-        "_zipper": attr.label(
-            default = Label("@bazel_tools//tools/zip:zipper"),
-            executable = True,
-            allow_single_file = True,
-            cfg = "host",
         ),
     },
     outputs = {
         "class_jar": "lib%{name}.jar",
     },
-    implementation = _groovy_jar_impl,
+    toolchains = REQUIRED_TOOLCHAINS,
+    doc = "Compiles Groovy sources into a deterministic library JAR. " +
+          "Internal — use `groovy_library` / `groovy_and_java_library`.",
 )
 
+# ---------------------------------------------------------------------------
+# Public macros: library + binary
+# ---------------------------------------------------------------------------
+
 def groovy_library(name, srcs = [], testonly = 0, deps = [], **kwargs):
-    """Rule analagous to java_library that accepts .groovy sources instead of
-    .java sources. The result is wrapped in a java_import so that java rules may
-    depend on it.
+    """Rule analogous to java_library that accepts .groovy sources instead of
+    .java sources. The result is wrapped in a java_import so that java rules
+    may depend on it.
     """
     _groovy_jar(
         name = name + "-impl",
@@ -176,8 +132,8 @@ def groovy_and_java_library(name, srcs = [], testonly = 0, deps = [], **kwargs):
     )
 
 def groovy_binary(name, main_class, srcs = [], testonly = 0, deps = [], **kwargs):
-    """Rule analagous to java_binary that accepts .groovy sources instead of .java
-    sources.
+    """Rule analogous to java_binary that accepts .groovy sources instead of
+    .java sources.
     """
     all_deps = deps + ["@groovy_sdk_artifact//:groovy"]
     if srcs:
@@ -196,72 +152,97 @@ def groovy_binary(name, main_class, srcs = [], testonly = 0, deps = [], **kwargs
         **kwargs
     )
 
+# ---------------------------------------------------------------------------
+# path_to_class — derive a Java FQCN from a test source path.
+# ISSUE-002: slice on the source's actual extension instead of always `.groovy`.
+# `src_roots` generalization (ISSUE-025) is deferred to v0.2.
+# ---------------------------------------------------------------------------
+
 def path_to_class(path):
+    """Convert a test source path to a Java/Groovy fully-qualified class name.
+
+    Accepts:
+      * `src/test/groovy/<pkg>/<Cls>.groovy` → `<pkg>.<Cls>`
+      * `src/test/java/<pkg>/<Cls>.java`     → `<pkg>.<Cls>`
+      * `src/test/java/<pkg>/<Cls>.groovy`   → `<pkg>.<Cls>`  (Groovy under java/
+                                                              is legal — groovyc
+                                                              accepts mixed sources)
+
+    Fails loudly on any other layout. ISSUE-025 (v0.2) generalizes via a
+    `src_roots` attr.
+    """
     if path.startswith("src/test/groovy/"):
-        return path[len("src/test/groovy/"):path.index(".groovy")].replace("/", ".")
+        prefix = "src/test/groovy/"
     elif path.startswith("src/test/java/"):
-        return path[len("src/test/java/"):path.index(".groovy")].replace("/", ".")
+        prefix = "src/test/java/"
     else:
-        fail("groovy_test sources must be under src/test/java or src/test/groovy")
+        fail("groovy_test sources must live under src/test/java or src/test/groovy, got: " + path)
+
+    if path.endswith(".groovy"):
+        ext = ".groovy"
+    elif path.endswith(".java"):
+        ext = ".java"
+    else:
+        fail("groovy_test src {} has unrecognized extension (expected .groovy or .java)".format(path))
+
+    return path[len(prefix):path.rindex(ext)].replace("/", ".")
+
+# ---------------------------------------------------------------------------
+# groovy_test — toolchain-resolved test launcher.
+# ISSUE-003: returns [DefaultInfo(runfiles=...)] instead of legacy struct.
+# ---------------------------------------------------------------------------
 
 def _groovy_test_impl(ctx):
-    # Collect jars from the Groovy sdk
-    groovy_sdk_jars = [
-        file
-        for file in ctx.files._groovysdk
-        if file.basename.endswith(".jar")
-    ]
-
-    # Extract all transitive dependencies
-    all_deps = depset(
-        ctx.files.deps + ctx.files._implicit_deps + groovy_sdk_jars,
-        transitive = [
-            dep[JavaInfo].transitive_runtime_jars
-            for dep in ctx.attr.deps
-            if JavaInfo in dep
-        ],
-    )
-
-    # Infer a class name from each src file
+    # Resolve the runtime classpath off the toolchain + caller-supplied deps.
+    # Chapter 5 routes JUnit/Spock through `dep_providers`; until then they
+    # come through the rule's own `deps` attribute (unchanged from upstream).
+    classpath = test_runtime_classpath(ctx, ctx.attr.deps + ctx.attr._implicit_deps)
     classes = [path_to_class(src.path) for src in ctx.files.srcs]
 
-    # Write a file that executes JUnit on the inferred classes
-    cmd = "$JAVA_HOME/bin/java %s -cp %s org.junit.runner.JUnitCore %s\n" % (
-        " ".join(ctx.attr.jvm_flags),
-        ":".join([dep.short_path for dep in all_deps.to_list()]),
-        " ".join(classes),
-    )
-    ctx.actions.write(
-        output = ctx.outputs.executable,
-        content = cmd,
+    write_test_launcher(
+        ctx = ctx,
+        classpath = classpath,
+        classes = classes,
+        jvm_flags = ctx.attr.jvm_flags,
+        # Hard-coded JUnit 4 runner FQCN matches the upstream behavior; the
+        # `groovy.testing(junit = "5")` tag class (chapter 5 / ISSUE-047) will
+        # plumb the runner class through the toolchain so JUnit 5 works.
+        runner_class = "org.junit.runner.JUnitCore",
     )
 
-    # Return all dependencies needed to run the tests
-    return struct(
-        runfiles = ctx.runfiles(files = all_deps.to_list() + ctx.files.data + ctx.files._jdk),
+    # Runfiles: classpath jars + caller-declared data + JDK runtime (so the
+    # `java` launcher embedded in the script resolves under bazel-bin/...
+    # without consulting host PATH).
+    java_runtime = ctx.toolchains["@bazel_tools//tools/jdk:runtime_toolchain_type"].java_runtime
+    runfiles = ctx.runfiles(
+        files = classpath.to_list() + ctx.files.data,
+        transitive_files = java_runtime.files,
     )
+    return [DefaultInfo(
+        runfiles = runfiles,
+        executable = ctx.outputs.executable,
+    )]
 
 _groovy_test = rule(
+    implementation = _groovy_test_impl,
     attrs = {
         "srcs": attr.label_list(
             mandatory = True,
-            allow_files = [".groovy"],
+            # `.java` accepted so `groovy_junit_test` can pass Java test
+            # sources through (ISSUE-002).
+            allow_files = [".groovy", ".java"],
         ),
         "data": attr.label_list(allow_files = True),
         "jvm_flags": attr.string_list(),
         "deps": attr.label_list(allow_files = [".jar"]),
-        "_groovysdk": attr.label(
-            default = Label("@groovy_sdk_artifact//:sdk"),
-        ),
         "_implicit_deps": attr.label_list(default = [
             Label("@junit_artifact//jar"),
         ]),
-        "_jdk": attr.label(
-            default = Label("@bazel_tools//tools/jdk:current_java_runtime"),
-        ),
     },
     test = True,
-    implementation = _groovy_test_impl,
+    toolchains = REQUIRED_TOOLCHAINS,
+    doc = "Toolchain-resolved Groovy test rule. Internal — use `groovy_test`, " +
+          "`groovy_junit_test`, or `spock_test`.",
 )
 
 def groovy_test(
