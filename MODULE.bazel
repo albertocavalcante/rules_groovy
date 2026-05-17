@@ -8,22 +8,27 @@ module(
 
 bazel_dep(name = "rules_java", version = "9.6.1")
 
-# rules_shell is needed because the static default toolchain at
-# //groovy/private/default_toolchain wraps `bin/groovyc` (an Apache Groovy
-# launcher shell script) as a sh_binary so the toolchain rule's
-# `groovyc = attr.label(executable = True, cfg = "exec")` resolves cleanly.
-# Chapter 5 replaces the static default toolchain with module-extension-
-# driven registration; rules_shell remains needed to wrap the launcher.
+# rules_shell wraps the bundled `bin/groovyc` POSIX launcher as an
+# sh_binary inside the generated SDK repo. The wrapper lives at
+# //groovy/private:groovyc_wrapper.sh and is staged into every
+# groovy_sdk_repository / groovy_local_sdk_repository.
 bazel_dep(name = "rules_shell", version = "0.6.1")
 bazel_dep(name = "bazel_skylib", version = "1.8.2", dev_dependency = True)
 
-# Load Groovy SDK and test dependencies via module extension
+# Chapter 5 of the v0.1.0 release narrative: the module extension owns
+# the user-facing API. Three tag classes (`groovy.toolchain`,
+# `groovy.local_toolchain`, `groovy.testing`) plus implicit defaults
+# make the minimal MODULE.bazel three lines. The extension emits the
+# `@groovy_toolchains` hub repo containing one groovy_toolchain +
+# toolchain(...) per registered SDK and a `:all` filegroup so
+# register_toolchains stays a one-liner regardless of how many SDKs
+# the build pins.
 groovy = use_extension("//groovy:extensions.bzl", "groovy")
-use_repo(groovy, "groovy_sdk_artifact", "junit_artifact", "spock_artifact")
 
-# Chapter 4 of the v0.1.0 release narrative: register a static default
-# groovy_toolchain so the rewritten rules in groovy.bzl (which now require
-# toolchain resolution via //groovy:toolchain_type) keep building the
-# example tree. Chapter 5 deletes //groovy/private/default_toolchain and
-# replaces it with module-extension-generated registration.
-register_toolchains("@rules_groovy//groovy/private/default_toolchain:groovy_default_toolchain")
+# `groovy_sdk_artifact`, `junit_artifact`, and `spock_artifact` are
+# referenced by literal label in //groovy:groovy.bzl macros (chapter 4
+# behavior; chapter 6/7 cleans them up). They're surfaced here so the
+# example tree and downstream BUILDs still resolve the labels.
+use_repo(groovy, "groovy_sdk_artifact", "junit_artifact", "spock_artifact", "groovy_toolchains")
+
+register_toolchains("@groovy_toolchains//:all")
