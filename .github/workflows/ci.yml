@@ -41,9 +41,24 @@ jobs:
       - name: Setup Bazelisk
         uses: bazelbuild/setup-bazelisk@v3
 
+      # Chapter 9 of the v0.1.0 release narrative: --lockfile_mode=error
+      # turns silent MODULE.bazel.lock mutations into hard failures. Pairs
+      # with the module extension's `extension_metadata(reproducible = True)`
+      # claim (chapter 5) — if the extension would re-resolve at build time
+      # and rewrite the lockfile, CI fails instead of papering over it.
       - name: Build (bzlmod)
         if: matrix.mode == 'bzlmod'
-        run: bazel build --config=bzlmod //...
+        run: bazel build --config=bzlmod --lockfile_mode=error //...
+        env:
+          USE_BAZEL_VERSION: ${{ matrix.bazel-version }}
+
+      # Chapter 9 — execute-time coverage. Compile-time correctness was
+      # established by the chapter-4 hermetic-actions rewrite; this step
+      # actually runs //src/test/groovy/lib:GroovyLibTest (and any future
+      # `groovy_test` targets) on the JVM.
+      - name: Test (bzlmod)
+        if: matrix.mode == 'bzlmod'
+        run: bazel test --config=bzlmod --lockfile_mode=error //...
         env:
           USE_BAZEL_VERSION: ${{ matrix.bazel-version }}
 
@@ -66,7 +81,7 @@ jobs:
 
       - name: Regenerate docs
         run: |
-          bazel build //docs:all
+          bazel build --lockfile_mode=error //docs:all
           # Stardoc outputs land in bazel-bin/docs/. Overwrite the
           # committed copies under docs/ and let `git diff` decide.
           cp bazel-bin/docs/rules-public.md docs/rules-public.md
