@@ -13,7 +13,17 @@ bazel_dep(name = "rules_java", version = "9.6.1")
 # //groovy/private:groovyc_wrapper.sh and is staged into every
 # groovy_sdk_repository / groovy_local_sdk_repository.
 bazel_dep(name = "rules_shell", version = "0.6.1")
-bazel_dep(name = "bazel_skylib", version = "1.8.2", dev_dependency = True)
+
+# bazel_skylib is loaded at top-level in `groovy/BUILD`,
+# `groovy/private/BUILD`, and `groovy/private/repositories/BUILD` for
+# `bzl_library` (which feeds Stardoc under //docs). The bzl_library
+# targets themselves are docs-only, but the `load("@bazel_skylib//...")`
+# at the top of each BUILD must resolve any time downstream consumers
+# evaluate a package in @rules_groovy — i.e. as soon as toolchain
+# resolution touches `@rules_groovy//groovy:toolchain_type`. Marking
+# this `dev_dependency = True` would break every downstream consumer
+# (verified by the new examples/ integration tests in this PR).
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
 
 # Stardoc generates the rule reference under //docs from the public .bzl
 # docstrings. Chapter 8 of the v0.1.0 release narrative: rule docstrings
@@ -32,10 +42,21 @@ bazel_dep(name = "stardoc", version = "0.8.1", dev_dependency = True)
 # the build pins.
 groovy = use_extension("//groovy:extensions.bzl", "groovy")
 
-# `groovy_sdk_artifact`, `junit_artifact`, and `spock_artifact` are
-# referenced by literal label in //groovy:groovy.bzl macros (chapter 4
-# behavior; chapter 6/7 cleans them up). They're surfaced here so the
-# example tree and downstream BUILDs still resolve the labels.
-use_repo(groovy, "groovy_sdk_artifact", "junit_artifact", "spock_artifact", "groovy_toolchains")
+# `junit_artifact` is the default value of `_groovy_test._implicit_deps`
+# in //groovy:groovy.bzl; the label is resolved in the rules_groovy
+# module's repo namespace, so this `use_repo` is load-bearing for the
+# JUnit 4 path. `groovy_toolchains` is consumed directly by
+# `register_toolchains` below.
+#
+# `groovy_sdk_artifact` and `spock_artifact` are referenced by literal
+# label inside the `groovy_binary` and `spock_test` macros, but those
+# labels are expanded in the *calling* repo's namespace; downstream
+# consumers `use_repo` them themselves (see `examples/<name>/MODULE.bazel`).
+# Listing them here would tie the rules_groovy module to the
+# implicit-default extension graph and break every downstream consumer
+# that declared a `groovy.toolchain` or `groovy.testing(spock = False)`
+# tag — the `examples/junit4_test` and `examples/multi_version` cases
+# in this PR.
+use_repo(groovy, "junit_artifact", "groovy_toolchains")
 
 register_toolchains("@groovy_toolchains//:all")

@@ -1,4 +1,14 @@
 /bazel-*
 
+# Bazel symlinks inside per-example modules under examples/.
+/examples/*/bazel-*
+
+# Per-example lockfiles. CI runs the examples job with
+# `--lockfile_mode=off` because the lockfile's transitive content
+# depends on the developer's Bazel version and locally fetched
+# artifacts; committing eight more lockfiles for the eight examples
+# adds noise without integrity value.
+/examples/*/MODULE.bazel.lock
+
 # Ignore IntelliJ library files
 .ijwb

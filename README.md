@@ -14,11 +14,18 @@ Add to your `MODULE.bazel`:
 bazel_dep(name = "rules_groovy", version = "0.1.0")
 
 groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
-use_repo(groovy, "groovy_sdk_artifact", "junit_artifact", "spock_artifact", "groovy_toolchains")
+use_repo(
+    groovy,
+    "groovy_sdk_artifact",
+    "junit_artifact",
+    "spock_artifact",
+    "groovy_toolchains",
+    "groovy_artifacts",
+)
 register_toolchains("@groovy_toolchains//:all")
 ```
 
-Groovy 4.0.x is the default; JUnit 4 and Spock are wired automatically. WORKSPACE is not supported; Bazel 9.0+ is required. The `use_repo` list will collapse to just `groovy_toolchains` in a follow-up that routes JUnit/Spock through the toolchain's `dep_providers` instead of literal repo labels.
+Groovy 4.0.x is the default; JUnit 5 (via the Spock-2-on-Groovy-4 auto-promotion path) and Spock 2.x are wired automatically. WORKSPACE is not supported; Bazel 9.0+ is required. The `use_repo` list will collapse to just `groovy_toolchains` in a follow-up that routes JUnit/Spock through the toolchain's `dep_providers` instead of literal repo labels (ISSUE-061).
 
 ## What's distinctive
 
@@ -106,12 +113,21 @@ sync with the source — see `docs/BUILD.bazel`.
 - [Module extension](docs/rules-extension.md) — `groovy.toolchain`,
   `groovy.local_toolchain`, `groovy.testing` tag classes.
 
-## Examples gallery
+## Examples
 
-See [`example/`](example/README.md) for self-contained references —
-one subdir per public-surface pattern (library, mixed JVM, binary,
-JUnit 4, Spock, plus README-only patterns for URL overrides, local
-SDKs, multi-version coexistence, and `rules_jvm_external` interop).
+See [`examples/`](examples/) for self-contained downstream Bazel
+modules — each subdir consumes `rules_groovy` via `local_path_override`
+the way a real consumer would consume it via BCR. CI runs
+`bazel test //...` inside each on every PR.
+
+- `minimal_library/` — bare `groovy_library`, no deps.
+- `stdlib_only_test/` — `groovy_junit5_test` against the JDK + Groovy stdlibs.
+- `junit4_test/` — `groovy_junit_test` under the legacy JUnit 4 runner (Groovy 2.5).
+- `junit5_test/` — `groovy_junit5_test` under JUnit 5 Jupiter.
+- `spock_test/` — `spock_test` against Spock 2.3 on the JUnit 5 Platform.
+- `maven_dep/` — `rules_jvm_external` interop; pulls Guava and uses it.
+- `mixed_jvm/` — `groovy_and_java_library` cross-language interop.
+- `binary/` — runnable `groovy_binary`.
 
 ## Versioning and roadmap
 

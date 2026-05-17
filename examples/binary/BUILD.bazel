@@ -1,0 +1,11 @@
+load("@rules_groovy//groovy:groovy.bzl", "groovy_binary")
+
+# Runnable via `bazel run //:app`. The Groovy runtime jar is added to
+# `runtime_deps` automatically by the `groovy_binary` macro (it
+# references `@groovy_sdk_artifact//:groovy`); downstream BUILDs do not
+# depend on that label explicitly.
+groovy_binary(
+    name = "app",
+    srcs = ["src/main/groovy/app/App.groovy"],
+    main_class = "app.App",
+)

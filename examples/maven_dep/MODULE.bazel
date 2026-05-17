@@ -1,0 +1,30 @@
+module(name = "rules_groovy_example_maven_dep", version = "0.0.0")
+
+bazel_dep(name = "rules_groovy", version = "0.0.0")
+bazel_dep(name = "rules_jvm_external", version = "6.5")
+local_path_override(
+    module_name = "rules_groovy",
+    path = "../..",
+)
+
+# Resolve the Guava artifact via rules_jvm_external; rules_groovy itself
+# does not depend on rules_jvm_external (see notes/maven-decoupling.md).
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    name = "maven",
+    artifacts = [
+        "com.google.guava:guava:33.4.0-jre",
+    ],
+)
+use_repo(maven, "maven")
+
+groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
+use_repo(
+    groovy,
+    "groovy_sdk_artifact",
+    "junit_artifact",
+    "spock_artifact",
+    "groovy_toolchains",
+    "groovy_artifacts",
+)
+register_toolchains("@groovy_toolchains//:all")

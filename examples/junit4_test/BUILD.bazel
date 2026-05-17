@@ -1,0 +1,16 @@
+load("@rules_groovy//groovy:groovy.bzl", "groovy_junit_test", "groovy_library")
+
+groovy_library(
+    name = "calc",
+    srcs = ["src/main/groovy/calc/Calc.groovy"],
+)
+
+# `groovy_junit_test` runs under the toolchain's `runner_class`, which
+# the module extension keeps at `org.junit.runner.JUnitCore` because
+# Groovy 2.5 + Spock 1.3 does not trigger the JUnit 5 auto-promotion
+# path. Sources use `@org.junit.Test` and `org.junit.Assert`.
+groovy_junit_test(
+    name = "CalcTest",
+    tests = ["src/test/groovy/calc/CalcTest.groovy"],
+    deps = [":calc"],
+)
