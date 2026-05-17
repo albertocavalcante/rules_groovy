@@ -27,16 +27,16 @@ What to look for: the `where:` data-driven table is pure Spock; if
 `@spock_artifact` weren't on the classpath, the spec wouldn't even
 compile.
 
-The target is tagged `manual` for v0.1.0. The Spock jar paired with
-Groovy 4.0 is Spock 2.x, which discovers specs through the JUnit 5
-Platform; the `spock_test` macro currently launches JUnit 4's
-`JUnitCore`, so no specs are found at runtime. A JUnit 5 launcher
-path is on the v0.2 roadmap. Until then, build-only verification:
+Under the Groovy 4 default the matched Spock is 2.3, which discovers
+specs through the JUnit 5 Platform. The module extension promotes the
+resolved testing flavor to JUnit 5 and points the toolchain's
+`runner_class` at `org.junit.platform.console.ConsoleLauncher`; the
+`spock_test` macro routes through that launcher with no per-target
+wiring. Pinning Groovy 2.5 via `groovy.toolchain(version = "2.5.23")`
+selects Spock 1.3 instead, which keeps the JUnit 4 launcher path.
+
+Run it:
 
 ```
-bazel build //example/spock:CalcSpec
+bazel test //example/spock:CalcSpec
 ```
-
-Pinning Groovy 2.5 via `groovy.toolchain(version = "2.5.23")` selects
-Spock 1.3 — which runs cleanly under JUnit 4 — if you need
-end-to-end execution today.

@@ -9,13 +9,12 @@ groovy_library(
 # spec is reachable from this package instead of from `src/test/groovy/`
 # at the workspace root.
 #
-# Tagged `manual` for now: the Spock jar matched to Groovy 4.0 is Spock
-# 2.3, which only runs under the JUnit 5 Platform engine. The
-# `spock_test` macro currently launches `org.junit.runner.JUnitCore`
-# (JUnit 4), so the spec compiles and links but no specs are discovered
-# at runtime. A JUnit 5 launcher path lands with ISSUE-023; until then
-# this example is build-only. `bazel build //example/spock:CalcSpec`
-# exercises the full compile / link / classpath wiring.
+# The Spock jar matched to Groovy 4.0 is Spock 2.3, which runs on the
+# JUnit 5 Platform. The module extension promotes the testing flavor to
+# JUnit 5 automatically (`SPOCK_FOR_GROOVY["4.0"].junit_flavor == "5"`)
+# and sets the toolchain's `runner_class` to
+# `org.junit.platform.console.ConsoleLauncher`; the `spock_test` macro
+# routes the spec through that launcher with no per-target wiring.
 spock_test(
     name = "CalcSpec",
     specs = ["src/test/groovy/calc/CalcSpec.groovy"],
@@ -23,6 +22,5 @@ spock_test(
         "example/spock/src/test/groovy",
         "example/spock/src/test/java",
     ],
-    tags = ["manual"],
     deps = [":calc"],
 )

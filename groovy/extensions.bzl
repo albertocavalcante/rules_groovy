@@ -326,6 +326,35 @@ def _resolve_testing(tag):
         },
     )
 
+def _promote_junit_flavor_for_spock(testing, groovy_major_minor):
+    """Lift `testing.junit` to `"5"` when the matched Spock release demands it.
+
+    Spock 2.x discovers specs via the JUnit Platform engine. Running it
+    under JUnitCore (the JUnit 4 runner) leaves zero specs discovered at
+    runtime — the failure mode that motivates ISSUE-023's bring-forward.
+    The Groovy-4 default plus `spock = True` falls into this branch
+    because `SPOCK_FOR_GROOVY["4.0"].junit_flavor == "5"`.
+
+    Returns the original `testing` struct unchanged when no promotion is
+    needed (junit = "none", spock disabled, unknown Groovy major.minor,
+    or Spock's matched release already runs under JUnit 4).
+    """
+    if testing.junit == "none":
+        return testing
+    if not testing.spock:
+        return testing
+    if groovy_major_minor not in SPOCK_FOR_GROOVY:
+        return testing
+    required = SPOCK_FOR_GROOVY[groovy_major_minor].junit_flavor
+    if required != "5" or testing.junit == "5":
+        return testing
+    return struct(
+        junit = "5",
+        spock = testing.spock,
+        maven_repo = testing.maven_repo,
+        labels = testing.labels,
+    )
+
 def _default_testing_spec():
     return struct(
         junit = "4",
@@ -363,6 +392,25 @@ def _toolchain_target_name(spec):
     """Hub-repo target name for a SDK spec, e.g. 'groovy_4_0_32'."""
     return "groovy_" + spec.version.replace(".", "_").replace("-", "_")
 
+# JUnit 5 artifacts the toolchain wires onto the test classpath beyond
+# the launcher itself. Order is insignificant; the runtime classpath is
+# a depset and the JVM resolves by package. Each entry maps the JUNIT5
+# artifact key to the logical dep_provider name we expose on the
+# toolchain hub (`junit_api`, `junit_engine`, `junit_platform_launcher`,
+# `junit_platform_engine`, `junit_platform_commons`, `opentest4j`,
+# `apiguardian_api`). The console launcher itself lands as the legacy
+# `junit_artifact` repo + the `junit_runner` logical name so the JUnit 4
+# code path keeps resolving `@junit_artifact//jar:jar`.
+_JUNIT5_EXTRA_ARTIFACTS = [
+    ("junit-jupiter-api", "junit_api"),
+    ("junit-jupiter-engine", "junit_engine"),
+    ("junit-platform-launcher", "junit_platform_launcher"),
+    ("junit-platform-engine", "junit_platform_engine"),
+    ("junit-platform-commons", "junit_platform_commons"),
+    ("opentest4j", "opentest4j"),
+    ("apiguardian-api", "apiguardian_api"),
+]
+
 def _emit_artifact_http_jars(testing):
     """Instantiate per-artifact http_jar repos for the pinned-default test deps.
 
@@ -371,6 +419,13 @@ def _emit_artifact_http_jars(testing):
     `groovy/groovy.bzl` macros keep resolving the labels. Other artifacts
     use `groovy_artifact_<logical>` names because no legacy consumer
     references them by literal label.
+
+    For `junit = "5"` we fetch the full Jupiter + Platform classpath
+    (jupiter-api + jupiter-engine for the test engine, platform-launcher
+    + platform-engine + platform-commons for the discovery API,
+    opentest4j + apiguardian-api as transitive deps). Console-launcher
+    keeps the legacy `junit_artifact` repo name so consumers that import
+    it by literal label (the JUnit 4 path) still resolve.
 
     Returns a dict {logical_name: "@<repo>//jar:jar"} for the artifacts
     that were actually fetched.
@@ -404,22 +459,27 @@ def _emit_artifact_http_jars(testing):
                 integrity = console.integrity,
             )
             fetched["junit"] = "@junit_artifact//jar:jar"
-        if testing.labels["junit_api"] == "":
-            api = JUNIT5.artifacts["junit-jupiter-api"]
+        # The remaining JUnit 5 platform jars: jupiter-api / jupiter-engine
+        # for the test engine, platform-launcher / platform-engine /
+        # platform-commons for the discovery API, plus opentest4j and
+        # apiguardian-api as transitive deps. ConsoleLauncher fails at
+        # runtime without the whole set on the classpath.
+        for artifact_key, logical in _JUNIT5_EXTRA_ARTIFACTS:
+            # `junit_api` and `junit_engine` are the only two with a
+            # public `*_label` override knob on the testing tag (added
+            # before the rest of the platform jars were wired); honor
+            # those overrides, fetch the rest unconditionally.
+            override_attr = logical
+            if testing.labels.get(override_attr, "") != "":
+                continue
+            spec = JUNIT5.artifacts[artifact_key]
+            repo_name = "groovy_artifact_" + logical
             http_jar(
-                name = "groovy_artifact_junit_api",
-                url = _maven_url(testing.maven_repo, api.coord),
-                integrity = api.integrity,
+                name = repo_name,
+                url = _maven_url(testing.maven_repo, spec.coord),
+                integrity = spec.integrity,
             )
-            fetched["junit_api"] = "@groovy_artifact_junit_api//jar:jar"
-        if testing.labels["junit_engine"] == "":
-            engine = JUNIT5.artifacts["junit-jupiter-engine"]
-            http_jar(
-                name = "groovy_artifact_junit_engine",
-                url = _maven_url(testing.maven_repo, engine.coord),
-                integrity = engine.integrity,
-            )
-            fetched["junit_engine"] = "@groovy_artifact_junit_engine//jar:jar"
+            fetched[logical] = "@" + repo_name + "//jar:jar"
 
     return fetched
 
@@ -468,8 +528,12 @@ def _build_artifacts_hub_body(testing, fetched, spock_label):
         if testing.junit == "4":
             _emit("hamcrest", fetched.get("hamcrest"))
         else:
-            _emit("junit_api", fetched.get("junit_api"))
-            _emit("junit_engine", fetched.get("junit_engine"))
+            # JUnit 5: every logical from `_JUNIT5_EXTRA_ARTIFACTS` plus
+            # the two with public `*_label` overrides. Each is an alias
+            # into the per-artifact http_jar (or the user-supplied
+            # override on the testing tag).
+            for _, logical in _JUNIT5_EXTRA_ARTIFACTS:
+                _emit(logical, fetched.get(logical))
 
     if testing.spock:
         if testing.labels["spock"] != "":
@@ -482,6 +546,18 @@ def _build_artifacts_hub_body(testing, fetched, spock_label):
 def _logical_to_artifacts_label(logical):
     """Label inside @groovy_artifacts for a logical dep name."""
     return "@groovy_artifacts//:" + logical
+
+def _runner_class_for(testing):
+    """FQCN of the test runner main matching the resolved testing flavor.
+
+    JUnit 4 → `org.junit.runner.JUnitCore` (positional FQCN args).
+    JUnit 5 → `org.junit.platform.console.ConsoleLauncher` (`--select-class`
+    per FQCN). The `groovy_test` launcher template (in actions.bzl)
+    branches on the runner string to emit the right invocation shape.
+    """
+    if testing.junit == "5":
+        return "org.junit.platform.console.ConsoleLauncher"
+    return "org.junit.runner.JUnitCore"
 
 def _hub_build_content(specs, testing, fetched, spock_label):
     """Render the full BUILD content for @groovy_toolchains."""
@@ -497,7 +573,9 @@ def _hub_build_content(specs, testing, fetched, spock_label):
     toolchain_targets = []
 
     # Determine which logical deps the @groovy_artifacts hub exposes for
-    # this testing config; only emit groovy_deps for those.
+    # this testing config; only emit groovy_deps for those. Order matters
+    # only for the deterministic dep_providers list rendered into the
+    # generated BUILD; the toolchain consumes them by logical name.
     available_logicals = []
     if testing.junit != "none":
         if fetched.get("junit") or testing.labels["junit"] != "":
@@ -506,12 +584,15 @@ def _hub_build_content(specs, testing, fetched, spock_label):
             if fetched.get("hamcrest") or testing.labels["hamcrest"] != "":
                 available_logicals.append(("hamcrest", "hamcrest"))
         else:
-            if fetched.get("junit_api") or testing.labels["junit_api"] != "":
-                available_logicals.append(("junit_api", "junit_api"))
-            if fetched.get("junit_engine") or testing.labels["junit_engine"] != "":
-                available_logicals.append(("junit_engine", "junit_engine"))
+            # JUnit 5: every platform / jupiter jar fetched (or
+            # overridden) becomes a `groovy_deps` on every toolchain.
+            for _, logical in _JUNIT5_EXTRA_ARTIFACTS:
+                if fetched.get(logical) or testing.labels.get(logical, "") != "":
+                    available_logicals.append((logical, logical))
     if testing.spock and (spock_label or testing.labels["spock"] != ""):
         available_logicals.append(("spock", "spock"))
+
+    runner_class = _runner_class_for(testing)
 
     for spec in specs:
         tname = _toolchain_target_name(spec)
@@ -540,11 +621,13 @@ def _hub_build_content(specs, testing, fetched, spock_label):
              "    sdk = \"@{sdk}//:sdk\",\n" +
              "    runtime_jar = \"@{sdk}//:runtime_jar\",\n" +
              "    version = \"{version}\",\n" +
+             "    runner_class = \"{runner_class}\",\n" +
              "    dep_providers = {deps},\n" +
              ")\n").format(
                 name = tname,
                 sdk = spec.repo_name,
                 version = spec.version,
+                runner_class = runner_class,
                 deps = dep_providers_repr,
             ),
         )
@@ -629,13 +712,21 @@ def _groovy_impl(module_ctx):
     for spec in specs:
         _emit_sdk_repo(spec)
 
+    # Promote the testing flavor to JUnit 5 when the matched Spock
+    # release for the primary toolchain requires it. Spock 2.x discovers
+    # specs via the JUnit Platform engine; running it under JUnitCore
+    # builds cleanly but discovers no specs. The Groovy-4 default falls
+    # into this branch (`SPOCK_FOR_GROOVY["4.0"].junit_flavor == "5"`),
+    # which is the whole point of bringing ISSUE-023 forward into v0.1.0.
+    primary_mm = _major_minor(specs[0].version) if specs else _major_minor(DEFAULT_GROOVY_VERSION)
+    testing = _promote_junit_flavor_for_spock(testing, primary_mm)
+
     # Materialize per-artifact http_jar repos for the pinned-default
     # test deps. Spock fetching is gated on the *first* resolved SDK's
     # major.minor — multi-version builds get the Spock matching the
     # primary toolchain. Users with mixed Spock requirements should
     # supply `spock_label` explicitly.
     fetched = _emit_artifact_http_jars(testing)
-    primary_mm = _major_minor(specs[0].version) if specs else _major_minor(DEFAULT_GROOVY_VERSION)
     spock_label = _emit_spock_jar(testing, primary_mm)
     _emit_mixing_diagnostic(testing, fetched)
 
