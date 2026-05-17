@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_java//java:defs.bzl", "java_binary", "java_import", "java_library")
+load("@rules_java//java:defs.bzl", "JavaInfo", "java_binary", "java_common", "java_import", "java_library")
 
 def _groovy_jar_impl(ctx):
     """Creates a .jar file from Groovy sources. Users should rely on
