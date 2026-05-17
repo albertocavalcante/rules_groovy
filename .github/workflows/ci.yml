@@ -13,8 +13,8 @@ concurrency:
 # Per rules_groovy-plan/decisions/ADR-005-bazel-9-baseline.md:
 # Bazel 9.x is the supported baseline (required, blocks merges).
 # Bazel 7.x and 8.x cells are advisory — they run on every PR for
-# regression signal but don't gate merges. Bazel 9 removed WORKSPACE,
-# so no Bazel-9 x WORKSPACE cells.
+# regression signal but don't gate merges. WORKSPACE is gone in
+# v0.1.0 (chapter 7); only bzlmod cells remain.
 
 jobs:
   build:
@@ -33,11 +33,6 @@ jobs:
           - { os: macos-latest,  bazel-version: '8.x', mode: bzlmod, advisory: true }
           - { os: ubuntu-latest, bazel-version: '7.x', mode: bzlmod, advisory: true }
           - { os: macos-latest,  bazel-version: '7.x', mode: bzlmod, advisory: true }
-          # Advisory: WORKSPACE on Bazel 7/8 (Bazel 9 removed WORKSPACE).
-          - { os: ubuntu-latest, bazel-version: '8.x', mode: workspace, advisory: true }
-          - { os: macos-latest,  bazel-version: '8.x', mode: workspace, advisory: true }
-          - { os: ubuntu-latest, bazel-version: '7.x', mode: workspace, advisory: true }
-          - { os: macos-latest,  bazel-version: '7.x', mode: workspace, advisory: true }
 
     steps:
       - name: Checkout
@@ -45,12 +40,6 @@ jobs:
 
       - name: Setup Bazelisk
         uses: bazelbuild/setup-bazelisk@v3
-
-      - name: Build (WORKSPACE)
-        if: matrix.mode == 'workspace'
-        run: bazel build //...
-        env:
-          USE_BAZEL_VERSION: ${{ matrix.bazel-version }}
 
       - name: Build (bzlmod)
         if: matrix.mode == 'bzlmod'
