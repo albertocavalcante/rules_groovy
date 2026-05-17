@@ -106,6 +106,13 @@ sync with the source — see `docs/BUILD.bazel`.
 - [Module extension](docs/rules-extension.md) — `groovy.toolchain`,
   `groovy.local_toolchain`, `groovy.testing` tag classes.
 
+## Examples gallery
+
+See [`example/`](example/README.md) for self-contained references —
+one subdir per public-surface pattern (library, mixed JVM, binary,
+JUnit 4, Spock, plus README-only patterns for URL overrides, local
+SDKs, multi-version coexistence, and `rules_jvm_external` interop).
+
 ## Versioning and roadmap
 
 Versions follow [semver](https://semver.org/) for normal releases. Four-component versions (e.g. `0.1.0.1`) are reserved for the rare case where a patch-set diverges from a registry pin while reusing the upstream tag.
