@@ -1,0 +1,48 @@
+module(name = "rules_groovy_example_multi_version", version = "0.0.0")
+
+bazel_dep(name = "rules_groovy", version = "0.0.0")
+local_path_override(
+    module_name = "rules_groovy",
+    path = "../..",
+)
+
+groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
+
+# Three SDKs pinned in the same build. The
+# `@rules_groovy//groovy/config_settings:groovy_version` build flag
+# disambiguates at resolution time:
+#
+#   bazel build //:lib                                                  # default 4.0.32
+#   bazel build --@rules_groovy//groovy/config_settings:groovy_version=3.0.25 //:lib
+#   bazel build --@rules_groovy//groovy/config_settings:groovy_version=2.5.23 //:lib
+#
+# This is the example that surfaces ISSUE-064: before the
+# target_settings discriminator landed, all three `groovy.toolchain`
+# tags emitted unconstrained `toolchain(...)` declarations and Bazel
+# resolved the first one for every build.
+groovy.toolchain(
+    name = "groovy2",
+    version = "2.5.23",
+)
+groovy.toolchain(
+    name = "groovy3",
+    version = "3.0.25",
+)
+groovy.toolchain(
+    name = "groovy4",
+    version = "4.0.32",
+)
+
+# Testing config left at the implicit defaults; the rules_groovy
+# module's own `use_repo` line pulls in `junit_artifact` and the
+# example's `groovy_library` does not exercise test-runner wiring,
+# so the Spock-version mismatch across Groovy 2.5 / 3.0 / 4.0 doesn't
+# matter for this example. `multi_version` is about toolchain
+# *selection*, not test execution.
+
+use_repo(
+    groovy,
+    "junit_artifact",
+    "groovy_toolchains",
+)
+register_toolchains("@groovy_toolchains//:all")

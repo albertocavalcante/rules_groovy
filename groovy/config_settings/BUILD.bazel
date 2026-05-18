@@ -1,0 +1,25 @@
+# Build flag that selects which registered Groovy toolchain Bazel resolves.
+#
+# `bazel build --@rules_groovy//groovy/config_settings:groovy_version=3.0.25 //...`
+# selects the 3.0.25 toolchain for the build. Omitting the flag keeps
+# the empty-string default, which the hub repo's `:is_default`
+# `config_setting` matches — at which point the toolchain whose version
+# equals `DEFAULT_GROOVY_VERSION` wins.
+#
+# Per-version `config_setting`s are *not* declared here because the set
+# of registered versions is dynamic: a user can pin a custom version
+# via `groovy.toolchain(version = "...", urls = [...], integrity = ...)`.
+# The `@groovy_toolchains` hub repo emits one `config_setting` per
+# registered SDK against this flag — see `groovy/private/repositories/hub.bzl`.
+#
+# Closes ISSUE-064; the v0.1.0 module extension emitted `toolchain(...)`
+# declarations with no `target_settings`, so Bazel resolved the first
+# registered toolchain and the rest were unreachable.
+
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+
+string_flag(
+    name = "groovy_version",
+    build_setting_default = "",
+    visibility = ["//visibility:public"],
+)

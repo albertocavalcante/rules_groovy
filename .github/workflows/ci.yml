@@ -85,6 +85,7 @@ jobs:
           - maven_dep
           - mixed_jvm
           - binary
+          - multi_version
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,8 +98,9 @@ jobs:
         run: |
           bazel build --lockfile_mode=off //...
           # Bazel test returns exit 4 ("no test targets found") for
-          # `minimal_library` and `binary`. Tolerate that exit code
-          # specifically; let any other non-zero failure bubble up.
+          # `minimal_library`, `binary`, and `multi_version`. Tolerate
+          # that exit code specifically; let any other non-zero
+          # failure bubble up.
           set +e
           bazel test --lockfile_mode=off --test_output=errors //...
           status=$?
@@ -107,6 +109,24 @@ jobs:
             exit 0
           fi
           exit $status
+        env:
+          USE_BAZEL_VERSION: '9.x'
+
+      - name: multi_version — exercise all three SDK selections
+        if: matrix.example == 'multi_version'
+        working-directory: examples/multi_version
+        run: |
+          set -euo pipefail
+          # No flag — `:is_default`-gated registration picks the
+          # toolchain whose version equals DEFAULT_GROOVY_VERSION
+          # (currently 4.0.32).
+          bazel build --lockfile_mode=off //:lib
+          # Explicit Groovy 3.0.25.
+          bazel build --lockfile_mode=off \
+            --@rules_groovy//groovy/config_settings:groovy_version=3.0.25 //:lib
+          # Explicit Groovy 2.5.23.
+          bazel build --lockfile_mode=off \
+            --@rules_groovy//groovy/config_settings:groovy_version=2.5.23 //:lib
         env:
           USE_BAZEL_VERSION: '9.x'
 

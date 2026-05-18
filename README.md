@@ -27,7 +27,10 @@ A short list of what this fork does that other JVM Bazel rulesets do not.
 - **Bazel-9-only, bzlmod-only.** No WORKSPACE, no compat matrix tax —
   the rule set is small because it serves one ecosystem cleanly.
 - **Multi-version Groovy coexistence is first-class.** Pin 2.5, 3.0,
-  and 4.0 in the same build via repeated `groovy.toolchain` tags.
+  and 4.0 in the same build via repeated `groovy.toolchain` tags;
+  pick one at build time with
+  `--@rules_groovy//groovy/config_settings:groovy_version=<version>`.
+  See `examples/multi_version/` for the canonical setup.
 - **Zero mandatory transitive deps beyond `rules_java`.** No
   `rules_jvm_external`, no `bazel_skylib` user-visible. JUnit and
   Spock ship via pinned `http_jar` defaults.
@@ -121,6 +124,9 @@ the way a real consumer would consume it via BCR. CI runs
 - `maven_dep/` — `rules_jvm_external` interop; pulls Guava and uses it.
 - `mixed_jvm/` — `groovy_and_java_library` cross-language interop.
 - `binary/` — runnable `groovy_binary`.
+- `multi_version/` — three Groovy SDKs registered in the same
+  module; the `groovy_version` build flag selects which one compiles
+  the library.
 
 ## Versioning and roadmap
 
