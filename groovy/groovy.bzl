@@ -380,11 +380,15 @@ def _groovy_test_impl(ctx):
 
     # Runfiles: classpath jars + caller-declared data + JDK runtime (so the
     # `java` launcher embedded in the script resolves under bazel-bin/...
-    # without consulting host PATH).
+    # without consulting host PATH). `ctx.runfiles(transitive_files=...)`
+    # accepts a depset directly — no `to_list()` flatten on `classpath`
+    # (Bazel perf doc: avoid depset flattening except for debugging).
+    # Both `classpath` and `java_runtime.files` are merged via a transitive
+    # depset so neither is eagerly walked.
     java_runtime = ctx.toolchains["@bazel_tools//tools/jdk:runtime_toolchain_type"].java_runtime
     runfiles = ctx.runfiles(
-        files = classpath.to_list() + ctx.files.data,
-        transitive_files = java_runtime.files,
+        files = ctx.files.data,
+        transitive_files = depset(transitive = [classpath, java_runtime.files]),
     )
     return [DefaultInfo(
         runfiles = runfiles,

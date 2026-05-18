@@ -62,26 +62,37 @@ def _java_toolchain(ctx):
     # @bazel_tools//tools/zip:zipper invocation (ISSUE-041).
     return ctx.toolchains[JAVA_TOOLCHAIN_TYPE].java
 
+def _jar_path_or_none(f):
+    """`Args.add_joined`/`add_all` `map_each` callback: keep jars, drop everything else.
+
+    Used to lazily filter classpath depsets at command-line construction
+    time so we never flatten a depset just to filter it (Bazel perf doc:
+    "avoid any flattening of depsets except for debugging purposes").
+    """
+    return f.path if f.path.endswith(".jar") else None
+
 def _deps_classpath(deps):
     """Build a depset[File] classpath from a list of dep targets.
 
     Accepts either JavaInfo-providing targets (preferred — pulls
-    `transitive_runtime_jars`) or bare `.jar` File-providing targets.
+    `transitive_runtime_jars`) or bare File-providing targets. Bare-file
+    deps may contribute non-jar files alongside jars; consumers filter to
+    `.jar` lazily at command-line construction via the
+    `_jar_path_or_none` `map_each` callback. This keeps the depset
+    purely transitive — no `to_list()` flatten just to drop non-jars
+    (Bazel perf doc).
     """
     java_info_jars = [
         dep[JavaInfo].transitive_runtime_jars
         for dep in deps
         if JavaInfo in dep
     ]
-    non_java_files = []
-    for dep in deps:
-        if JavaInfo not in dep:
-            non_java_files.extend([
-                f
-                for f in dep.files.to_list()
-                if f.path.endswith(".jar")
-            ])
-    return depset(non_java_files, transitive = java_info_jars)
+    non_java_file_depsets = [
+        dep.files
+        for dep in deps
+        if JavaInfo not in dep
+    ]
+    return depset(transitive = java_info_jars + non_java_file_depsets)
 
 def _toolchain_dep_provider_jars(ctx):
     """Every `GroovyDepsInfo.java_info.transitive_runtime_jars` from the toolchain.
@@ -173,11 +184,15 @@ def compile_groovy(ctx, srcs, deps, output_jar):
 
     # Classpath is built lazily from a depset and joined with the platform's
     # path separator. ":" matches the upstream behavior; Windows support
-    # (ISSUE-027) is a v0.2 deliverable.
+    # (ISSUE-027) is a v0.2 deliverable. `map_each = _jar_path_or_none`
+    # drops any non-jar files contributed by bare-file deps in
+    # `_deps_classpath` — the filter happens lazily here rather than
+    # eagerly via `to_list()` in `_deps_classpath` (Bazel perf doc).
     groovyc_args.add_joined(
         "-cp",
         classpath,
         join_with = ":",
+        map_each = _jar_path_or_none,
         # Empty classpath is legal (groovyc tolerates it). Omit the flag
         # entirely so we never emit a trailing `-cp ""`.
         omit_if_empty = True,
@@ -237,16 +252,21 @@ def test_runtime_classpath(ctx, deps):
       * Caller-supplied deps' transitive runtime jars (JavaInfo) or raw .jars.
     """
     groovy_info = _groovy_info(ctx)
-    sdk_jars = [f for f in groovy_info.sdk_files.to_list() if f.path.endswith(".jar")]
 
     toolchain_dep_jars = []
     for dep in ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].deps:
         if dep.java_info != None:
             toolchain_dep_jars.append(dep.java_info.transitive_runtime_jars)
 
+    # Return the SDK's file depset transitively rather than flattening
+    # it to filter for `.jar` (Bazel perf doc: avoid `to_list()`). The
+    # launcher-script writer (`write_test_launcher`) must flatten the
+    # final classpath anyway — it calls `ctx.actions.write` which can't
+    # consume `ctx.actions.args` — and applies the `.jar` filter at
+    # write-time, where the cost is bounded by the single flatten we
+    # already pay.
     return depset(
-        sdk_jars,
-        transitive = [_deps_classpath(deps)] + toolchain_dep_jars,
+        transitive = [groovy_info.sdk_files, _deps_classpath(deps)] + toolchain_dep_jars,
     )
 
 # FQCN of JUnit 5's `ConsoleLauncher`. Compared against the toolchain's
@@ -310,7 +330,19 @@ def write_test_launcher(ctx, classpath, classes, jvm_flags, runner_class):
     # the launcher never consults host PATH.
     java_bin = java_runtime.java_executable_runfiles_path
 
-    cp_str = ":".join([f.short_path for f in classpath.to_list()])
+    # The classpath depset is flattened here because `ctx.actions.write`
+    # cannot consume `ctx.actions.args` — the launcher script needs the
+    # literal `:`-joined string inlined into bash. This is the one
+    # legitimate `to_list()` call in the rule code (Bazel perf doc
+    # carves out exactly this case). The `.jar` filter that used to live
+    # in `test_runtime_classpath` and `_deps_classpath` now lives here:
+    # the input depset can carry non-jar files (SDK metadata, bare-file
+    # deps) and we drop them at the same flatten we're already paying.
+    cp_str = ":".join([
+        f.short_path
+        for f in classpath.to_list()
+        if f.path.endswith(".jar")
+    ])
     flags_str = " ".join(jvm_flags)
     runner_args = _runner_args(runner_class, classes)
 
