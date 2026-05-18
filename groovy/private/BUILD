@@ -23,3 +23,49 @@ bzl_library(
     name = "versions_bzl",
     srcs = ["versions.bzl"],
 )
+
+bzl_library(
+    name = "toolchain_bzl",
+    srcs = ["toolchain.bzl"],
+    deps = ["//groovy:rules_java_bzl"],
+)
+
+bzl_library(
+    name = "runtime_bzl",
+    srcs = ["runtime.bzl"],
+    deps = [
+        ":actions_bzl",
+        "//groovy:rules_java_bzl",
+    ],
+)
+
+bzl_library(
+    name = "library_bzl",
+    srcs = ["library.bzl"],
+    deps = [
+        ":actions_bzl",
+        ":runtime_bzl",
+        ":toolchain_bzl",
+        "//groovy:rules_java_bzl",
+    ],
+)
+
+bzl_library(
+    name = "binary_bzl",
+    srcs = ["binary.bzl"],
+    deps = [
+        ":library_bzl",
+        ":runtime_bzl",
+        "//groovy:rules_java_bzl",
+    ],
+)
+
+bzl_library(
+    name = "test_bzl",
+    srcs = ["test.bzl"],
+    deps = [
+        ":actions_bzl",
+        ":library_bzl",
+        "//groovy:rules_java_bzl",
+    ],
+)

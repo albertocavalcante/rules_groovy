@@ -28,7 +28,7 @@ Covers:
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts", "unittest")
-load("//groovy:groovy.bzl", "path_to_class")
+load("//groovy:defs.bzl", "path_to_class")
 
 # ---------------------------------------------------------------------------
 # Default `src_roots` — Maven layout at the workspace root.

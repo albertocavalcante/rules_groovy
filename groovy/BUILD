@@ -1,5 +1,5 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
-load("//groovy:groovy.bzl", "groovy_runtime")
+load("//groovy:defs.bzl", "groovy_runtime")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -23,20 +23,34 @@ groovy_runtime(
 # public .bzl files; `deps` expects bzl_library so Stardoc can resolve
 # `load()` references during doc extraction.
 
+# The canonical public load surface — `defs.bzl` re-exports every macro,
+# rule, provider, and helper from the per-topic `private/*.bzl` files.
+bzl_library(
+    name = "defs_bzl",
+    srcs = ["defs.bzl"],
+    deps = [
+        "//groovy/private:binary_bzl",
+        "//groovy/private:library_bzl",
+        "//groovy/private:runtime_bzl",
+        "//groovy/private:test_bzl",
+        "//groovy/private:toolchain_bzl",
+    ],
+)
+
+# Back-compat shim: re-exports the public macros / rules / providers from
+# `defs.bzl`. Listed here so existing `load("//groovy:groovy.bzl", ...)` /
+# `load("//groovy:toolchain.bzl", ...)` callers keep resolving for one
+# release.
 bzl_library(
     name = "groovy_bzl",
     srcs = ["groovy.bzl"],
-    deps = [
-        ":rules_java_bzl",
-        ":toolchain_bzl",
-        "//groovy/private:actions_bzl",
-    ],
+    deps = [":defs_bzl"],
 )
 
 bzl_library(
     name = "toolchain_bzl",
     srcs = ["toolchain.bzl"],
-    deps = [":rules_java_bzl"],
+    deps = [":defs_bzl"],
 )
 
 # Stub `bzl_library` wrapping the rules_java public + transitive

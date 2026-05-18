@@ -1,4 +1,4 @@
-# Stardoc-generated rule reference. The rule docstrings in //groovy/*.bzl
+# Stardoc-generated rule reference. The rule docstrings in //groovy/...bzl
 # are the source of truth; this package emits one markdown file per public
 # .bzl. The generated files are committed alongside the .bzl sources, and
 # CI runs `bazel build //docs:all` + `git diff --exit-code docs/` to fail
@@ -8,21 +8,33 @@ load("@stardoc//stardoc:stardoc.bzl", "stardoc")
 
 package(default_visibility = ["//visibility:private"])
 
-# Public rules (groovy_library, groovy_binary, groovy_test, ...).
+# Public rules + macros + helpers + toolchain providers. `defs.bzl` is the
+# single canonical load surface and re-exports every symbol below from a
+# per-topic `private/*.bzl`.
 stardoc(
     name = "rules_public_md",
     out = "rules-public.md",
-    input = "//groovy:groovy.bzl",
-    deps = ["//groovy:groovy_bzl"],
+    input = "//groovy:defs.bzl",
+    deps = ["//groovy:defs_bzl"],
 )
 
 # Toolchain providers and rules (groovy_toolchain, groovy_deps,
-# GroovyToolchainInfo, GroovyDepsInfo).
+# GroovyToolchainInfo, GroovyDepsInfo, GroovyLibraryInfo) — sourced from
+# `defs.bzl` so the rendered load paths match the canonical public
+# surface. The `symbol_names` filter scopes the page to just the
+# toolchain-related symbols.
 stardoc(
     name = "rules_toolchain_md",
     out = "rules-toolchain.md",
-    input = "//groovy:toolchain.bzl",
-    deps = ["//groovy:toolchain_bzl"],
+    input = "//groovy:defs.bzl",
+    symbol_names = [
+        "groovy_deps",
+        "groovy_toolchain",
+        "GroovyDepsInfo",
+        "GroovyLibraryInfo",
+        "GroovyToolchainInfo",
+    ],
+    deps = ["//groovy:defs_bzl"],
 )
 
 # Module extension (groovy.toolchain, groovy.local_toolchain,

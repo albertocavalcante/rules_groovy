@@ -1,4 +1,4 @@
-load("@rules_groovy//groovy:groovy.bzl", "groovy_library")
+load("@rules_groovy//groovy:defs.bzl", "groovy_library")
 
 # Single library; which Groovy SDK compiles it is decided at
 # resolution time by the `groovy_version` build flag. With no flag,

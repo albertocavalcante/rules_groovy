@@ -11,7 +11,7 @@ Groovy via CodeNarc's transitives or reach into internal repo names.
 Run: `bazel test //:codenarc --test_output=all`.
 """
 
-load("@rules_groovy//groovy:groovy.bzl", "groovy_library")
+load("@rules_groovy//groovy:defs.bzl", "groovy_library")
 load("@rules_java//java:defs.bzl", "java_binary")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 

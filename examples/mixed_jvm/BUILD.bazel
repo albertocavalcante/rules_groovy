@@ -1,4 +1,4 @@
-load("@rules_groovy//groovy:groovy.bzl", "groovy_and_java_library", "groovy_junit5_test", "groovy_library")
+load("@rules_groovy//groovy:defs.bzl", "groovy_and_java_library", "groovy_junit5_test", "groovy_library")
 load("@rules_java//java:defs.bzl", "java_library")
 
 # `groovy_and_java_library` partitions `srcs` by extension, compiles

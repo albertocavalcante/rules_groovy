@@ -47,7 +47,7 @@ A short list of what this fork does that other JVM Bazel rulesets do not.
 A library plus a binary that depends on it:
 
 ```python
-load("@rules_groovy//groovy:groovy.bzl", "groovy_library", "groovy_binary")
+load("@rules_groovy//groovy:defs.bzl", "groovy_library", "groovy_binary")
 
 groovy_library(
     name = "lib",
@@ -65,7 +65,7 @@ groovy_binary(
 A mixed Groovy + Java library — `groovy_library` accepts both source extensions natively via groovyc joint compilation:
 
 ```python
-load("@rules_groovy//groovy:groovy.bzl", "groovy_library")
+load("@rules_groovy//groovy:defs.bzl", "groovy_library")
 
 groovy_library(
     name = "lib",
@@ -77,7 +77,7 @@ A JUnit test (Groovy sources must live under `src/test/groovy/...` or
 `src/test/java/...`):
 
 ```python
-load("@rules_groovy//groovy:groovy.bzl", "groovy_test")
+load("@rules_groovy//groovy:defs.bzl", "groovy_test")
 
 groovy_test(
     name = "LibTest",
@@ -89,7 +89,7 @@ groovy_test(
 A Spock specification:
 
 ```python
-load("@rules_groovy//groovy:groovy.bzl", "spock_test")
+load("@rules_groovy//groovy:defs.bzl", "spock_test")
 
 spock_test(
     name = "LibSpec",

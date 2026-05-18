@@ -1,5 +1,5 @@
 load("@rules_java//java:defs.bzl", "java_binary", "java_library")
-load("//groovy:toolchain.bzl", "groovy_deps", "groovy_toolchain")
+load("//groovy:defs.bzl", "groovy_deps", "groovy_toolchain")
 load(
     ":path_to_class_test.bzl",
     "custom_root_test",
