@@ -20,6 +20,8 @@ register_toolchains("@groovy_toolchains//:all")
 
 Groovy 4.0.x is the default; JUnit 5 (via the Spock-2-on-Groovy-4 auto-promotion path) and Spock 2.x are wired automatically. WORKSPACE is not supported; Bazel 9.0+ is required.
 
+For non-`groovy_*` rules that need Groovy on their runtime classpath (e.g. a plain `java_binary` running CodeNarc or another Groovy program), depend on `@rules_groovy//groovy:runtime` — a `JavaInfo`-providing handle on the toolchain's resolved Groovy SDK jar. See [`examples/codenarc/`](examples/codenarc/).
+
 ## What's distinctive
 
 A short list of what this fork does that other JVM Bazel rulesets do not.
@@ -127,6 +129,9 @@ the way a real consumer would consume it via BCR. CI runs
 - `multi_version/` — three Groovy SDKs registered in the same
   module; the `groovy_version` build flag selects which one compiles
   the library.
+- `codenarc/` — CodeNarc static analysis as a `bazel test //:codenarc`
+  target, demonstrating `@rules_groovy//groovy:runtime` on a plain
+  `java_binary`'s runtime classpath.
 
 ## Versioning and roadmap
 

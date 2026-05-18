@@ -1,4 +1,5 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("//groovy:groovy.bzl", "groovy_runtime")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -6,6 +7,16 @@ package(default_visibility = ["//visibility:public"])
 # type; `groovy_*` rules resolve via `ctx.toolchains["//groovy:toolchain_type"]`.
 toolchain_type(
     name = "toolchain_type",
+)
+
+# Stable `JavaInfo` handle on the toolchain's Groovy SDK runtime jar.
+# Consumed by non-`groovy_*` rules (e.g. plain `java_binary` running a
+# Groovy program like CodeNarc) that need Groovy on their runtime classpath
+# but don't otherwise have toolchain access. Per-version selection via the
+# `groovy_version` build flag (PR #22) is automatic — the rule resolves
+# the toolchain like every other rule in this set.
+groovy_runtime(
+    name = "runtime",
 )
 
 # bzl_library targets for Stardoc. //docs runs `stardoc(...)` against the

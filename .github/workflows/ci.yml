@@ -86,6 +86,7 @@ jobs:
           - mixed_jvm
           - binary
           - multi_version
+          - codenarc
     steps:
       - name: Checkout
         uses: actions/checkout@v4

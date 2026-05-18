@@ -1,0 +1,50 @@
+"""CodeNarc static-analysis example for rules_groovy.
+
+The pattern: wrap CodeNarc's CLI as a `java_binary` and invoke it from
+an `sh_test`. The new bit (PR #23 / ISSUE-065) is
+`@rules_groovy//groovy:runtime` — a stable `JavaInfo` label backed by
+the toolchain's resolved Groovy SDK jar. CodeNarc is itself a Groovy
+program, so it needs Groovy on its runtime classpath; without
+`@rules_groovy//groovy:runtime` you'd either let Maven pull a duplicate
+Groovy via CodeNarc's transitives or reach into internal repo names.
+
+Run: `bazel test //:codenarc --test_output=all`.
+"""
+
+load("@rules_groovy//groovy:groovy.bzl", "groovy_library")
+load("@rules_java//java:defs.bzl", "java_binary")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+groovy_library(
+    name = "lib",
+    srcs = glob(["src/main/groovy/**/*.groovy"]),
+    visibility = ["//visibility:public"],
+)
+
+# CodeNarc CLI. `@rules_groovy//groovy:runtime` puts the toolchain-
+# resolved Groovy SDK jar on the runtime classpath; CodeNarc is a
+# Groovy program and won't start without `groovy.lang.*` reachable.
+java_binary(
+    name = "codenarc_cli",
+    main_class = "org.codenarc.CodeNarc",
+    runtime_deps = [
+        "@maven//:org_codenarc_CodeNarc",
+        "@rules_groovy//groovy:runtime",
+    ],
+)
+
+# The `sh_test` is the actual test target — `bazel test //:codenarc`
+# runs CodeNarc and fails if any priority-1/2/3 violations are
+# reported against the example's `src/main/groovy/` sources.
+sh_test(
+    name = "codenarc",
+    srcs = ["codenarc.sh"],
+    data = [
+        ":codenarc_cli",
+        "codenarc.groovy",
+    ] + glob(["src/main/groovy/**/*.groovy"]),
+    args = [
+        "$(rootpath :codenarc_cli)",
+        "$(rootpath codenarc.groovy)",
+    ],
+)
