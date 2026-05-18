@@ -22,6 +22,17 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
   test framework deps via `rules_jvm_external`) is queued for v0.2
   per `rules_groovy-plan/notes/roadmap-v0.1-v0.2.md`. (#29, ISSUE-071)
 
+### Changed
+
+- License headers: bumped the fork's copyright year from
+  `2025-present` to `2026-present` across all 24 first-party
+  files (`.bzl`, `BUILD`, `BUILD.bazel`, `*.sh`, `*.groovy`,
+  `LICENSE.txt`, `docs/airgapped.md`). The fork was started in
+  early 2026; the original `2025-present` was carried over from
+  upstream `bazelbuild/rules_groovy` without correction. The
+  Google copyright line in `LICENSE.txt` is untouched.
+  (ISSUE-060)
+
 ### Tests
 
 - `tests/hermeticity_test.bzl`: analysistest that introspects the

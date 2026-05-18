@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2025-present Alberto Cavalcante. All rights reserved.
+# Copyright 2026-present Alberto Cavalcante. All rights reserved.
 # Licensed under the Apache License, Version 2.0.
 #
 # Bazel-executable wrapper around the bundled Apache Groovy launcher.
