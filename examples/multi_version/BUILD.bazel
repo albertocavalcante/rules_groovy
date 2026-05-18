@@ -1,0 +1,11 @@
+load("@rules_groovy//groovy:groovy.bzl", "groovy_library")
+
+# Single library; which Groovy SDK compiles it is decided at
+# resolution time by the `groovy_version` build flag. With no flag,
+# the toolchain whose `version` equals `DEFAULT_GROOVY_VERSION`
+# (currently 4.0.32) wins via its `:is_default`-gated registration.
+groovy_library(
+    name = "lib",
+    srcs = ["src/main/groovy/lib/Lib.groovy"],
+    visibility = ["//visibility:public"],
+)

@@ -12,17 +12,29 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
   `groovy_library` target. Carries the source-file `depset` for future
   `gazelle-groovy` and strict-deps tooling. Field list is intentionally
   small; not yet covered by SemVer until v0.2.0. (#21)
+- Per-version Groovy toolchain selection via a new build flag at
+  `@rules_groovy//groovy/config_settings:groovy_version` (a
+  `bazel_skylib` `string_flag`, default `""`). The `@groovy_toolchains`
+  hub repo now emits one `config_setting` per registered SDK plus an
+  `:is_default` setting matching the unset flag value, and every
+  `toolchain(...)` declaration carries a matching `target_settings`
+  list. The "default" SDK (the spec whose `version` equals
+  `DEFAULT_GROOVY_VERSION` if registered, else the first declared
+  spec) registers a second time gated on `:is_default` so the no-flag
+  case resolves to it. Closes ISSUE-064. (#22)
+- `examples/multi_version/`: three `groovy.toolchain` tags
+  (`2.5.23`, `3.0.25`, `4.0.32`) registered in one module; the
+  README walks through the three `bazel build` invocations the new
+  flag enables. The example was deferred from PR #20 pending the
+  toolchain-selection mechanism this PR introduces. (#22)
 - `examples/` directory: self-contained Bazel modules exercising the
   ruleset as a downstream consumer. Each subdir's `MODULE.bazel`
   pulls in `rules_groovy` via `local_path_override` and is built /
   tested in isolation by the new `examples` CI matrix. The set ships
   eight examples: `minimal_library`, `stdlib_only_test`,
   `junit4_test`, `junit5_test`, `spock_test`, `maven_dep`,
-  `mixed_jvm`, `binary`. The ninth slot (`multi_version`) is deferred
-  to ISSUE-064 — the module extension does not yet emit per-toolchain
-  `target_settings` / `config_setting` discriminators, so two
-  `groovy.toolchain` declarations can be registered but only one is
-  reachable. (#20)
+  `mixed_jvm`, `binary`. The ninth slot (`multi_version`) is added
+  in #22. (#20)
 - Root-level `.bazelignore` so `//...` evaluation at the repo root
   does not recurse into per-example `MODULE.bazel` files. (#20)
 - Root-level `REPO.bazel` declaring `default_visibility =
