@@ -45,6 +45,7 @@ The required checks on `main`:
 - `bazel build` and `bazel test //...` on Bazel 9.x, Linux and macOS, bzlmod mode. These must be green to merge.
 - `--lockfile_mode=error` is enforced on the same matrix; `MODULE.bazel.lock` is authoritative and any unexpected re-resolution fails the build.
 - The docs regen check rebuilds `//docs:all` and fails if the committed Stardoc output under `docs/` diverges from what the current `.bzl` docstrings produce.
+- `buildifier --mode=check --lint=warn` over `groovy/`, `tests/`, `docs/`, `MODULE.bazel`, and `REPO.bazel` (pinned to `bazelbuild/buildtools` v8.5.1). The `examples/` tree is intentionally excluded — each example is its own downstream module.
 
 Bazel 7.x and 8.x cells run for regression signal but are advisory — they do not gate merges.
 
@@ -55,6 +56,14 @@ bazel build //...
 bazel test //...
 bazel build --lockfile_mode=error //...
 ```
+
+To match the buildifier CI gate, auto-format `.bzl` / `BUILD` / `MODULE.bazel` / `REPO.bazel` files before pushing:
+
+```
+buildifier --mode=fix --lint=fix -r groovy tests docs MODULE.bazel REPO.bazel
+```
+
+Install with `brew install buildifier` on macOS or `go install github.com/bazelbuild/buildtools/buildifier@v8.5.1` elsewhere. If buildifier surfaces a lint warning that the local change genuinely cannot satisfy (e.g. a `ctx` arg required by Bazel's `rule(implementation = ...)` signature but not read in the body), opt out per-line with `# buildifier: disable=<rule>` and leave a one-line justification — don't disable rules repo-wide.
 
 If you changed any `.bzl` docstrings, also run:
 

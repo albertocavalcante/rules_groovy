@@ -211,6 +211,11 @@ not `.groovy` / `.java`.
 | <a id="path_to_class-path"></a>path |  Workspace-relative path to a test source file.   |  none |
 | <a id="path_to_class-src_roots"></a>src_roots |  Source-root prefixes to try, longest first. Defaults to `["src/test/groovy", "src/test/java"]`.   |  `["src/test/groovy", "src/test/java"]` |
 
+**RETURNS**
+
+The fully-qualified Java/Groovy class name as a string (e.g.
+`"com.example.MyTest"`).
+
 
 <a id="groovy_and_java_library"></a>
 

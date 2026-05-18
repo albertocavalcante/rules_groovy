@@ -33,6 +33,24 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
   Google copyright line in `LICENSE.txt` is untouched.
   (ISSUE-060)
 
+### CI
+
+- New `buildifier` job in `.github/workflows/ci.yml`. Runs
+  `buildifier --mode=check --lint=warn` over `groovy/`, `tests/`,
+  `docs/`, `MODULE.bazel`, and `REPO.bazel` on every PR. Pinned to
+  `bazelbuild/buildtools` v8.5.1 by SHA256. Fails on any required
+  reformat or surfaced lint warning. `examples/` is intentionally
+  excluded — each example is its own downstream module with its
+  own style. Existing violations (three reformat-only diffs in
+  `docs/BUILD.bazel`, `groovy/extensions.bzl`,
+  `groovy/private/actions.bzl`; missing-docstring-args/return
+  warnings on `toolchain_deps_by_name`, `test_runtime_classpath`,
+  `path_to_class`; missing module-docstring on `REPO.bazel`; and
+  one `unused-variable` on the `_no_match_rule_impl(ctx)` analysis
+  helper — opted out with `# buildifier: disable=unused-variable`
+  because `ctx` is required by Bazel's `rule(implementation=...)`
+  signature) were fixed in the same PR. (ISSUE-069)
+
 ### Tests
 
 - `tests/hermeticity_test.bzl`: analysistest that introspects the

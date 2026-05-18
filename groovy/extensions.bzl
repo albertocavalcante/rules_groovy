@@ -459,6 +459,7 @@ def _emit_artifact_http_jars(testing):
                 integrity = console.integrity,
             )
             fetched["junit"] = "@junit_artifact//jar:jar"
+
         # The remaining JUnit 5 platform jars: jupiter-api / jupiter-engine
         # for the test engine, platform-launcher / platform-engine /
         # platform-commons for the discovery API, plus opentest4j and

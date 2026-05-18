@@ -132,6 +132,55 @@ jobs:
         env:
           USE_BAZEL_VERSION: '9.x'
 
+  buildifier:
+    # ISSUE-069: lint + format check for Starlark / BUILD files. Pre-1.0
+    # is when style is cheapest to enforce — gating now keeps `groovy/`,
+    # `tests/`, `MODULE.bazel`, `REPO.bazel`, and `docs/BUILD.bazel`
+    # uniformly buildifier-clean before v0.1.0 ships.
+    #
+    # Scope notes:
+    #   * `examples/` is intentionally excluded. Each example is its own
+    #     downstream module with its own (potentially less strict) style.
+    #     Locking them under the rules repo's buildifier policy would
+    #     couple downstream contributor onboarding to our hygiene bar.
+    #   * Buildifier ships as a single static binary from
+    #     bazelbuild/buildtools. Pinned by tag + SHA256 (see the install
+    #     step) — no Bazel target, no setup action, no transitive
+    #     dependency. The download is verified before exec.
+    name: buildifier
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Buildifier (pinned v8.5.1)
+        env:
+          # Pinned to the v8.5.1 release (latest as of 2026-01-30).
+          # SHA256 captured from
+          #   curl -sL .../buildifier-linux-amd64 | sha256sum
+          # on 2026-05-18. Refresh both values together when bumping.
+          BUILDIFIER_VERSION: v8.5.1
+          BUILDIFIER_SHA256: 887377fc64d23a850f4d18a077b5db05b19913f4b99b270d193f3c7334b5a9a7
+        run: |
+          set -euo pipefail
+          url="https://github.com/bazelbuild/buildtools/releases/download/${BUILDIFIER_VERSION}/buildifier-linux-amd64"
+          curl -fsSL -o /usr/local/bin/buildifier "$url"
+          echo "${BUILDIFIER_SHA256}  /usr/local/bin/buildifier" | sha256sum -c -
+          chmod +x /usr/local/bin/buildifier
+          buildifier --version
+
+      - name: Buildifier check
+        # Explicit paths instead of `-r .` so `examples/` is excluded.
+        # `--mode=check` exits non-zero on any required reformat; combined
+        # with `--lint=warn` it also surfaces (and fails on) lint warnings.
+        # Keep this list in sync with the top-level Starlark layout.
+        run: |
+          buildifier \
+            --mode=check \
+            --lint=warn \
+            -r groovy tests docs \
+            MODULE.bazel REPO.bazel
+
   docs-regen-check:
     # Chapter 8 of the v0.1.0 release narrative: rule docstrings in
     # //groovy/*.bzl are the source of truth. //docs runs Stardoc to
