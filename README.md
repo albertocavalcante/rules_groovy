@@ -8,19 +8,57 @@ This is the actively maintained fork of `bazelbuild/rules_groovy` (marked unmain
 
 ## Setup
 
-Add to your `MODULE.bazel`:
+`rules_groovy` is not yet published to the Bazel Central Registry (BCR).
+Consume it via `git_override` against a pinned commit:
 
 ```python
 bazel_dep(name = "rules_groovy", version = "0.1.0")
+git_override(
+    module_name = "rules_groovy",
+    remote = "https://github.com/albertocavalcante/rules_groovy.git",
+    commit = "<pin a specific commit hash>",
+)
 
 groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
 use_repo(groovy, "groovy_toolchains")
 register_toolchains("@groovy_toolchains//:all")
 ```
 
+Once `rules_groovy` is published to BCR, drop the `git_override` block
+and pin the version in `bazel_dep` alone.
+
 Groovy 4.0.x is the default; JUnit 5 (via the Spock-2-on-Groovy-4 auto-promotion path) and Spock 2.x are wired automatically. WORKSPACE is not supported; Bazel 9.0+ is required.
 
 For non-`groovy_*` rules that need Groovy on their runtime classpath (e.g. a plain `java_binary` running CodeNarc or another Groovy program), depend on `@rules_groovy//groovy:runtime` — a `JavaInfo`-providing handle on the toolchain's resolved Groovy SDK jar. See [`examples/codenarc/`](examples/codenarc/).
+
+### Pinning a Groovy version
+
+`groovy.toolchain(version = ...)` selects the SDK. Three versions ship
+in the registry: `2.5.23`, `3.0.25`, and `4.0.32` (the default). Pin a
+non-default version by passing it explicitly:
+
+```python
+groovy.toolchain(version = "3.0.25")
+```
+
+Multiple `groovy.toolchain` tags can coexist in one module. The
+`--@rules_groovy//groovy/config_settings:groovy_version` build flag
+selects which one is used at build time. The canonical setup lives in
+[`examples/multi_version/MODULE.bazel`](examples/multi_version/MODULE.bazel):
+
+```python
+groovy.toolchain(name = "groovy2", version = "2.5.23")
+groovy.toolchain(name = "groovy3", version = "3.0.25")
+groovy.toolchain(name = "groovy4", version = "4.0.32")
+```
+
+Build with a specific SDK:
+
+```sh
+bazel build //:lib                                                       # default 4.0.32
+bazel build --@rules_groovy//groovy/config_settings:groovy_version=3.0.25 //:lib
+bazel build --@rules_groovy//groovy/config_settings:groovy_version=2.5.23 //:lib
+```
 
 ## What's distinctive
 
@@ -98,10 +136,68 @@ spock_test(
 )
 ```
 
+## Using rules_groovy in air-gapped or offline environments
+
+`rules_groovy` is designed to compose with Bazel's standard offline
+facilities. Every external download is integrity-pinned and every URL
+is overridable from `MODULE.bazel` without forking the rules.
+
+Two Bazel-level knobs do most of the work. `--repository_cache=/path`
+points Bazel at a content-addressed cache of every fetched file, shared
+across builds and workspaces. `--distdir=/path` points at a pre-staged
+directory of downloaded blobs that Bazel consults before hitting the
+network. Both are content-addressed by SHA-256, so a populated
+`distdir` plus a populated `repository_cache` is sufficient to build
+with zero network access.
+
+For the Groovy SDK tarball itself, `groovy.toolchain` accepts a `urls`
+list, an `integrity` hash, a `strip_prefix`, and a `lib_jar` path —
+overriding any of these falls back to the registry default for the
+fields you do not set. The typical air-gapped form points `urls` at a
+`file://` path or an internal HTTP mirror:
+
+```python
+groovy.toolchain(
+    version = "4.0.32",
+    urls = ["https://artifactory.corp/apache-archive/groovy/4.0.32/distribution/apache-groovy-binary-4.0.32.zip"],
+)
+```
+
+For the test-runtime jars (JUnit 4 / 5, Spock, Hamcrest, opentest4j,
+apiguardian, and the JUnit-5 platform set), `groovy.testing(maven_repo
+= ...)` swaps the Maven Central base URL for an internal mirror in a
+single line:
+
+```python
+groovy.testing(
+    junit = "5",
+    spock = True,
+    maven_repo = "https://artifactory.corp/maven-central",
+)
+```
+
+For the strictest air-gap with no network at any point, the
+`groovy.local_toolchain(sdk_path = ...)` path skips download entirely
+and consumes a pre-installed SDK directly off the build machine.
+Combined with `rules_jvm_external` for test-runtime resolution and
+`--distdir` / `--repository_cache` for any remaining transitive Bazel
+deps, this covers the full air-gap case.
+
+The full enumeration of external downloads, three end-to-end
+`MODULE.bazel` recipes (restricted-egress, full air-gap with internal
+Nexus, BYO SDK), and the current override gaps live in
+[`docs/airgapped.md`](docs/airgapped.md).
+
 ## Rule reference
 
-Generated from the `.bzl` docstrings via Stardoc. CI keeps these in
-sync with the source — see `docs/BUILD.bazel`.
+`@rules_groovy//groovy:defs.bzl` is the single canonical load surface
+for every public symbol — rules, providers, and helpers. The legacy
+`groovy/groovy.bzl` and `groovy/toolchain.bzl` files remain as
+deprecated shims that re-export from `defs.bzl`; they are slated for
+removal in a future release.
+
+Stardoc keeps the per-symbol docs in sync with the source — see
+`docs/BUILD.bazel`.
 
 - [Public rules](docs/rules-public.md) — `groovy_library`,
   `groovy_and_java_library`, `groovy_binary`, `groovy_test`,
