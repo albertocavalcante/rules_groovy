@@ -6,6 +6,30 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Tests
+
+- `tests/hermeticity_test.bzl`: analysistest that introspects the
+  actions emitted by a `groovy_library`. Asserts `Groovyc` and
+  `GroovySingleJar` mnemonics are present (i.e. compile + package go
+  through `ctx.actions.run`, not `run_shell`); asserts the `Groovyc`
+  action's `env` contains a non-empty `JAVA_HOME` and no host-env
+  keys (`PATH`, `HOME`, `USER`, `GROOVY_HOME`, `LD_LIBRARY_PATH`) —
+  the practical proxy for the otherwise-not-introspectable
+  `use_default_shell_env` flag. (#28)
+- `examples/reproducibility/`: builds a one-class `groovy_library`,
+  hashes the output jar via `shasum -a 256`, and diffs against a
+  checked-in golden via `bazel-skylib`'s `diff_test`. Verifies the
+  `Groovyc` → `GroovySingleJar` chain is byte-reproducible across
+  cold and warm builds; the golden was seeded on macOS / arm64 and
+  the README documents the OS-specific drift escape hatch. (#28)
+- `examples/long_classpath/`: 100 generated `groovy_library` targets
+  and one consumer listing every one in `deps`. Exercises the
+  param-file path from ISSUE-050: without
+  `use_param_file("@%s", use_always = True)` the compile command
+  line would exceed Linux's `ARG_MAX` and fail with E2BIG. Source
+  files are emitted by `write_file` at analysis time so the example
+  doesn't ship 100 trivial `.groovy` files. (#28)
+
 ### Added
 
 - `@rules_groovy//groovy:runtime` target exposing the toolchain's

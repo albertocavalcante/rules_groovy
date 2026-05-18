@@ -87,6 +87,8 @@ jobs:
           - binary
           - multi_version
           - codenarc
+          - reproducibility
+          - long_classpath
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -99,9 +101,9 @@ jobs:
         run: |
           bazel build --lockfile_mode=off //...
           # Bazel test returns exit 4 ("no test targets found") for
-          # `minimal_library`, `binary`, and `multi_version`. Tolerate
-          # that exit code specifically; let any other non-zero
-          # failure bubble up.
+          # `minimal_library`, `binary`, `multi_version`, and
+          # `long_classpath`. Tolerate that exit code specifically;
+          # let any other non-zero failure bubble up.
           set +e
           bazel test --lockfile_mode=off --test_output=errors //...
           status=$?
