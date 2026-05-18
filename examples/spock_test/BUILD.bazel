@@ -1,4 +1,4 @@
-load("@rules_groovy//groovy:groovy.bzl", "groovy_library", "spock_test")
+load("@rules_groovy//groovy:defs.bzl", "groovy_library", "spock_test")
 
 groovy_library(
     name = "calc",

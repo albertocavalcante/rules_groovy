@@ -1,34 +1,25 @@
 <!-- Generated with Stardoc: http://skydoc.bazel.build -->
 
-Groovy toolchain providers and rules.
+Public Groovy build rules.
 
-Defines the toolchain shape consumed by `groovy_library`, `groovy_binary`,
-`groovy_test`, and friends. Two providers and two rules:
+Single load surface for every user-facing symbol in this ruleset:
 
-  * `GroovyToolchainInfo` carries the resolved SDK (compiler, runtime jar,
-    full SDK file set, version string).
-  * `GroovyDepsInfo` names a `JavaInfo` bundle so the toolchain can point at
-    test frameworks (junit, spock, hamcrest, ...) by logical name rather than
-    by hard-coded attribute. Pattern lifted from `rules_scala`.
-  * `groovy_toolchain` is the rule that produces `GroovyToolchainInfo` and a
-    list of `GroovyDepsInfo` bundles.
-  * `groovy_deps` wraps a `JavaInfo`-providing target into a `GroovyDepsInfo`
-    with a logical name.
+  * Macros: `groovy_library`, `groovy_and_java_library`, `groovy_binary`,
+    `groovy_test`, `groovy_junit_test`, `groovy_junit5_test`, `spock_test`.
+  * Rules: `groovy_runtime`, `groovy_toolchain`, `groovy_deps`.
+  * Providers: `GroovyToolchainInfo`, `GroovyDepsInfo`, `GroovyLibraryInfo`.
+  * Helpers: `path_to_class`.
 
-The toolchain type is declared in `groovy/BUILD` as
-`@rules_groovy//groovy:toolchain_type`.
-
-Compile / test actions read `ctx.toolchains["//groovy:toolchain_type"]` and
-pull `GroovyToolchainInfo` off the `groovy_info` field; deps come off the
-`deps` list and are matched by `GroovyDepsInfo.name`. This file only defines
-the shape; the action wiring lives in `groovy/private/actions.bzl`.
+Every symbol is re-exported from a single-responsibility `.bzl` under
+`groovy/private/`. Downstream BUILD files should `load("@rules_groovy//groovy:defs.bzl", ...)`
+for everything.
 
 <a id="groovy_deps"></a>
 
 ## groovy_deps
 
 <pre>
-load("@rules_groovy//groovy:toolchain.bzl", "groovy_deps")
+load("@rules_groovy//groovy:defs.bzl", "groovy_deps")
 
 groovy_deps(<a href="#groovy_deps-name">name</a>, <a href="#groovy_deps-dep">dep</a>, <a href="#groovy_deps-dep_name">dep_name</a>)
 </pre>
@@ -50,7 +41,7 @@ Wraps a JavaInfo target into a GroovyDepsInfo with a logical name (dep_providers
 ## groovy_toolchain
 
 <pre>
-load("@rules_groovy//groovy:toolchain.bzl", "groovy_toolchain")
+load("@rules_groovy//groovy:defs.bzl", "groovy_toolchain")
 
 groovy_toolchain(<a href="#groovy_toolchain-name">name</a>, <a href="#groovy_toolchain-dep_providers">dep_providers</a>, <a href="#groovy_toolchain-groovyc">groovyc</a>, <a href="#groovy_toolchain-runner_class">runner_class</a>, <a href="#groovy_toolchain-runtime_jar">runtime_jar</a>, <a href="#groovy_toolchain-sdk">sdk</a>, <a href="#groovy_toolchain-version">version</a>)
 </pre>
@@ -76,7 +67,7 @@ Defines a Groovy toolchain: compiler, SDK file set, runtime jar, and named dep b
 ## GroovyDepsInfo
 
 <pre>
-load("@rules_groovy//groovy:toolchain.bzl", "GroovyDepsInfo")
+load("@rules_groovy//groovy:defs.bzl", "GroovyDepsInfo")
 
 GroovyDepsInfo(<a href="#GroovyDepsInfo-name">name</a>, <a href="#GroovyDepsInfo-java_info">java_info</a>)
 </pre>
@@ -96,7 +87,7 @@ Named bundle of JavaInfo-providing deps reachable from a toolchain (dep_provider
 ## GroovyLibraryInfo
 
 <pre>
-load("@rules_groovy//groovy:toolchain.bzl", "GroovyLibraryInfo")
+load("@rules_groovy//groovy:defs.bzl", "GroovyLibraryInfo")
 
 GroovyLibraryInfo(<a href="#GroovyLibraryInfo-srcs">srcs</a>)
 </pre>
@@ -115,7 +106,7 @@ Groovy-specific library metadata. Companion to `JavaInfo` on every `groovy_libra
 ## GroovyToolchainInfo
 
 <pre>
-load("@rules_groovy//groovy:toolchain.bzl", "GroovyToolchainInfo")
+load("@rules_groovy//groovy:defs.bzl", "GroovyToolchainInfo")
 
 GroovyToolchainInfo(<a href="#GroovyToolchainInfo-groovyc">groovyc</a>, <a href="#GroovyToolchainInfo-sdk_files">sdk_files</a>, <a href="#GroovyToolchainInfo-runtime_jar">runtime_jar</a>, <a href="#GroovyToolchainInfo-version">version</a>, <a href="#GroovyToolchainInfo-runner_class">runner_class</a>)
 </pre>

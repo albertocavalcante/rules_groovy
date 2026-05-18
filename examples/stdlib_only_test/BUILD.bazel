@@ -1,4 +1,4 @@
-load("@rules_groovy//groovy:groovy.bzl", "groovy_junit5_test")
+load("@rules_groovy//groovy:defs.bzl", "groovy_junit5_test")
 
 # A JUnit 5 test whose source uses only Groovy + JDK stdlib types. No
 # user-declared Maven deps, no per-target `src_roots` override — the

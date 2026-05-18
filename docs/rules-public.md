@@ -2,40 +2,46 @@
 
 Public Groovy build rules.
 
-This file defines the user-facing rules and macros — `groovy_library`,
-`groovy_and_java_library`, `groovy_binary`, `groovy_test`,
-`groovy_junit_test`, `groovy_junit5_test`, and `spock_test`. The
-shape mirrors `rules_kotlin`'s `kt_jvm_library` — a single rule that
-returns `JavaInfo` directly, accepts mixed `.groovy` + `.java` srcs
-natively, and exposes the standard JVM-rule attribute surface
-(`runtime_deps`, `exports`, `data`, `resources`, `neverlink`,
-`plugins`).
+Single load surface for every user-facing symbol in this ruleset:
 
-All actions are hermetic and resolved through the toolchain registered
-by the `groovy` module extension (see `extensions.bzl`).
+  * Macros: `groovy_library`, `groovy_and_java_library`, `groovy_binary`,
+    `groovy_test`, `groovy_junit_test`, `groovy_junit5_test`, `spock_test`.
+  * Rules: `groovy_runtime`, `groovy_toolchain`, `groovy_deps`.
+  * Providers: `GroovyToolchainInfo`, `GroovyDepsInfo`, `GroovyLibraryInfo`.
+  * Helpers: `path_to_class`.
 
-Macro signatures preserve source-level compatibility with upstream
-`bazelbuild/rules_groovy 0.0.6`; downstream BUILD files keep working
-without edits.
+Every symbol is re-exported from a single-responsibility `.bzl` under
+`groovy/private/`. Downstream BUILD files should `load("@rules_groovy//groovy:defs.bzl", ...)`
+for everything.
 
-Test rules pull JUnit / Spock / hamcrest / Jupiter / Platform artifacts
-off the toolchain's `dep_providers` list (`GroovyDepsInfo.name`); the
-legacy `@junit_artifact`, `@spock_artifact`, `@groovy_sdk_artifact`
-literal labels no longer appear in this file (ISSUE-061).
+<a id="groovy_deps"></a>
 
-Every wrapping macro in this file is a Bazel-8+ symbolic macro
-(`macro(implementation = ..., attrs = ...)`); legacy `def`-based macros
-were retired in ISSUE-067. Callers see unchanged signatures — the
-migration is internal — and benefit from explicit `name`/`visibility`
-parameters on each impl function plus macro-scoped visibility on every
-internal scaffolding target the macro emits.
+## groovy_deps
+
+<pre>
+load("@rules_groovy//groovy:defs.bzl", "groovy_deps")
+
+groovy_deps(<a href="#groovy_deps-name">name</a>, <a href="#groovy_deps-dep">dep</a>, <a href="#groovy_deps-dep_name">dep_name</a>)
+</pre>
+
+Wraps a JavaInfo target into a GroovyDepsInfo with a logical name (dep_providers indirection).
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="groovy_deps-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="groovy_deps-dep"></a>dep |  JavaInfo-providing target whose classpath backs this logical dep.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="groovy_deps-dep_name"></a>dep_name |  Logical name the toolchain looks up at use time (e.g. 'junit_runner', 'spock').   | String | required |  |
+
 
 <a id="groovy_library"></a>
 
 ## groovy_library
 
 <pre>
-load("@rules_groovy//groovy:groovy.bzl", "groovy_library")
+load("@rules_groovy//groovy:defs.bzl", "groovy_library")
 
 groovy_library(<a href="#groovy_library-name">name</a>, <a href="#groovy_library-deps">deps</a>, <a href="#groovy_library-srcs">srcs</a>, <a href="#groovy_library-data">data</a>, <a href="#groovy_library-resources">resources</a>, <a href="#groovy_library-exports">exports</a>, <a href="#groovy_library-neverlink">neverlink</a>, <a href="#groovy_library-plugins">plugins</a>, <a href="#groovy_library-runtime_deps">runtime_deps</a>)
 </pre>
@@ -63,7 +69,7 @@ Compile Groovy (and optionally Java) sources into a JVM library jar. Returns `Ja
 ## groovy_runtime
 
 <pre>
-load("@rules_groovy//groovy:groovy.bzl", "groovy_runtime")
+load("@rules_groovy//groovy:defs.bzl", "groovy_runtime")
 
 groovy_runtime(<a href="#groovy_runtime-name">name</a>)
 </pre>
@@ -78,12 +84,100 @@ Exposes the active Groovy toolchain's resolved runtime jar as a `JavaInfo`-provi
 | <a id="groovy_runtime-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 
 
+<a id="groovy_toolchain"></a>
+
+## groovy_toolchain
+
+<pre>
+load("@rules_groovy//groovy:defs.bzl", "groovy_toolchain")
+
+groovy_toolchain(<a href="#groovy_toolchain-name">name</a>, <a href="#groovy_toolchain-dep_providers">dep_providers</a>, <a href="#groovy_toolchain-groovyc">groovyc</a>, <a href="#groovy_toolchain-runner_class">runner_class</a>, <a href="#groovy_toolchain-runtime_jar">runtime_jar</a>, <a href="#groovy_toolchain-sdk">sdk</a>, <a href="#groovy_toolchain-version">version</a>)
+</pre>
+
+Defines a Groovy toolchain: compiler, SDK file set, runtime jar, and named dep bundles.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="groovy_toolchain-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="groovy_toolchain-dep_providers"></a>dep_providers |  List of groovy_deps targets bound to this toolchain.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="groovy_toolchain-groovyc"></a>groovyc |  The groovyc launcher target (script or in-process driver). Read via ctx.executable.groovyc.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="groovy_toolchain-runner_class"></a>runner_class |  FQCN of the test runner main class. Defaults to `org.junit.runner.JUnitCore` (JUnit 4). Set to `org.junit.platform.console.ConsoleLauncher` when the toolchain is wired for JUnit 5 (Jupiter / Spock 2.x). The module extension sets this automatically from the resolved `groovy.testing(junit = ...)` flavor.   | String | optional |  `"org.junit.runner.JUnitCore"`  |
+| <a id="groovy_toolchain-runtime_jar"></a>runtime_jar |  The groovy-X.Y.Z.jar to place on the runtime classpath.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="groovy_toolchain-sdk"></a>sdk |  Filegroup containing the full Groovy SDK contents.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="groovy_toolchain-version"></a>version |  Resolved SDK version string, e.g. '4.0.32'. Diagnostics only.   | String | required |  |
+
+
+<a id="GroovyDepsInfo"></a>
+
+## GroovyDepsInfo
+
+<pre>
+load("@rules_groovy//groovy:defs.bzl", "GroovyDepsInfo")
+
+GroovyDepsInfo(<a href="#GroovyDepsInfo-name">name</a>, <a href="#GroovyDepsInfo-java_info">java_info</a>)
+</pre>
+
+Named bundle of JavaInfo-providing deps reachable from a toolchain (dep_providers indirection).
+
+**FIELDS**
+
+| Name  | Description |
+| :------------- | :------------- |
+| <a id="GroovyDepsInfo-name"></a>name |  string: logical name (e.g. 'junit_runner', 'spock', 'hamcrest').    |
+| <a id="GroovyDepsInfo-java_info"></a>java_info |  JavaInfo: the actual dep bundle for consumers.    |
+
+
+<a id="GroovyLibraryInfo"></a>
+
+## GroovyLibraryInfo
+
+<pre>
+load("@rules_groovy//groovy:defs.bzl", "GroovyLibraryInfo")
+
+GroovyLibraryInfo(<a href="#GroovyLibraryInfo-srcs">srcs</a>)
+</pre>
+
+Groovy-specific library metadata. Companion to `JavaInfo` on every `groovy_library` target. Reserved for future `gazelle-groovy` and strict-deps tooling; consumers should not depend on the field list being stable across major versions.
+
+**FIELDS**
+
+| Name  | Description |
+| :------------- | :------------- |
+| <a id="GroovyLibraryInfo-srcs"></a>srcs |  depset[File]: the .groovy and .java sources that produced this library.    |
+
+
+<a id="GroovyToolchainInfo"></a>
+
+## GroovyToolchainInfo
+
+<pre>
+load("@rules_groovy//groovy:defs.bzl", "GroovyToolchainInfo")
+
+GroovyToolchainInfo(<a href="#GroovyToolchainInfo-groovyc">groovyc</a>, <a href="#GroovyToolchainInfo-sdk_files">sdk_files</a>, <a href="#GroovyToolchainInfo-runtime_jar">runtime_jar</a>, <a href="#GroovyToolchainInfo-version">version</a>, <a href="#GroovyToolchainInfo-runner_class">runner_class</a>)
+</pre>
+
+Resolved Groovy SDK + runtime info for a single toolchain instance.
+
+**FIELDS**
+
+| Name  | Description |
+| :------------- | :------------- |
+| <a id="GroovyToolchainInfo-groovyc"></a>groovyc |  File: the groovyc launcher executable (script or in-process driver).    |
+| <a id="GroovyToolchainInfo-sdk_files"></a>sdk_files |  depset[File]: full SDK contents for action inputs.    |
+| <a id="GroovyToolchainInfo-runtime_jar"></a>runtime_jar |  File: the groovy-X.Y.Z.jar to put on the runtime classpath.    |
+| <a id="GroovyToolchainInfo-version"></a>version |  string: e.g. '4.0.32'. Diagnostics only - actions read SDK files, not the version string.    |
+| <a id="GroovyToolchainInfo-runner_class"></a>runner_class |  string: FQCN of the test runner main class. `org.junit.runner.JUnitCore` for JUnit 4, `org.junit.platform.console.ConsoleLauncher` for JUnit 5. Consumed by `groovy_test`'s launcher template to pick the right invocation shape.    |
+
+
 <a id="path_to_class"></a>
 
 ## path_to_class
 
 <pre>
-load("@rules_groovy//groovy:groovy.bzl", "path_to_class")
+load("@rules_groovy//groovy:defs.bzl", "path_to_class")
 
 path_to_class(<a href="#path_to_class-path">path</a>, <a href="#path_to_class-src_roots">src_roots</a>)
 </pre>
@@ -123,7 +217,7 @@ not `.groovy` / `.java`.
 ## groovy_and_java_library
 
 <pre>
-load("@rules_groovy//groovy:groovy.bzl", "groovy_and_java_library")
+load("@rules_groovy//groovy:defs.bzl", "groovy_and_java_library")
 
 groovy_and_java_library(*, <a href="#groovy_and_java_library-name">name</a>, <a href="#groovy_and_java_library-deps">deps</a>, <a href="#groovy_and_java_library-srcs">srcs</a>, <a href="#groovy_and_java_library-data">data</a>, <a href="#groovy_and_java_library-resources">resources</a>, <a href="#groovy_and_java_library-aspect_hints">aspect_hints</a>, <a href="#groovy_and_java_library-compatible_with">compatible_with</a>,
                         <a href="#groovy_and_java_library-deprecation">deprecation</a>, <a href="#groovy_and_java_library-exec_compatible_with">exec_compatible_with</a>, <a href="#groovy_and_java_library-exec_group_compatible_with">exec_group_compatible_with</a>,
@@ -178,7 +272,7 @@ Deprecated: use `groovy_library` directly. This alias is removed in v0.2.0.
 ## groovy_binary
 
 <pre>
-load("@rules_groovy//groovy:groovy.bzl", "groovy_binary")
+load("@rules_groovy//groovy:defs.bzl", "groovy_binary")
 
 groovy_binary(*, <a href="#groovy_binary-name">name</a>, <a href="#groovy_binary-deps">deps</a>, <a href="#groovy_binary-srcs">srcs</a>, <a href="#groovy_binary-data">data</a>, <a href="#groovy_binary-resources">resources</a>, <a href="#groovy_binary-args">args</a>, <a href="#groovy_binary-aspect_hints">aspect_hints</a>, <a href="#groovy_binary-classpath_resources">classpath_resources</a>,
               <a href="#groovy_binary-compatible_with">compatible_with</a>, <a href="#groovy_binary-deploy_manifest_lines">deploy_manifest_lines</a>, <a href="#groovy_binary-deprecation">deprecation</a>, <a href="#groovy_binary-env">env</a>, <a href="#groovy_binary-exec_compatible_with">exec_compatible_with</a>,
@@ -196,7 +290,7 @@ NOTE: this macro composes `rules_java`'s `java_binary` rule for the
 runnable wrapper. That's a deliberate, scoped coupling — re-implementing
 the launcher script (Linux/Windows/coverage) is non-trivial and a v0.2
 follow-up if needed. The Groovy SDK runtime jar enters the binary's
-classpath via a hidden `_groovy_sdk_runtime` helper rule so this macro
+classpath via a hidden `groovy_sdk_runtime` helper rule so this macro
 no longer needs to reference `@groovy_sdk_artifact//:groovy` by literal
 label.
 
@@ -204,7 +298,7 @@ Common `java_binary` attributes (`main_class`, `jvm_flags`, `data`,
 `env`, `args`, `stamp`, `launcher`, `resources`, `classpath_resources`,
 `deploy_manifest_lines`, `use_testrunner`) are exposed explicitly and
 forwarded to the underlying `java_binary`. The `runtime_deps` attribute
-is owned by this macro — the generated `_groovy_sdk_runtime` target
+is owned by this macro — the generated `groovy_sdk_runtime` target
 plus, when `srcs` is non-empty, an internal `name + "_lib"`
 `groovy_library` for the binary's own sources are wired through it
 automatically. Internal scaffolding (the SDK-runtime and library
@@ -251,7 +345,7 @@ public surface.
 ## groovy_junit5_test
 
 <pre>
-load("@rules_groovy//groovy:groovy.bzl", "groovy_junit5_test")
+load("@rules_groovy//groovy:defs.bzl", "groovy_junit5_test")
 
 groovy_junit5_test(*, <a href="#groovy_junit5_test-name">name</a>, <a href="#groovy_junit5_test-deps">deps</a>, <a href="#groovy_junit5_test-data">data</a>, <a href="#groovy_junit5_test-resources">resources</a>, <a href="#groovy_junit5_test-aspect_hints">aspect_hints</a>, <a href="#groovy_junit5_test-compatible_with">compatible_with</a>, <a href="#groovy_junit5_test-deprecation">deprecation</a>,
                    <a href="#groovy_junit5_test-exec_compatible_with">exec_compatible_with</a>, <a href="#groovy_junit5_test-exec_group_compatible_with">exec_group_compatible_with</a>, <a href="#groovy_junit5_test-exec_properties">exec_properties</a>, <a href="#groovy_junit5_test-features">features</a>,
@@ -313,7 +407,7 @@ visibility — callers do not reach into it directly.
 ## groovy_junit_test
 
 <pre>
-load("@rules_groovy//groovy:groovy.bzl", "groovy_junit_test")
+load("@rules_groovy//groovy:defs.bzl", "groovy_junit_test")
 
 groovy_junit_test(*, <a href="#groovy_junit_test-name">name</a>, <a href="#groovy_junit_test-deps">deps</a>, <a href="#groovy_junit_test-data">data</a>, <a href="#groovy_junit_test-resources">resources</a>, <a href="#groovy_junit_test-aspect_hints">aspect_hints</a>, <a href="#groovy_junit_test-compatible_with">compatible_with</a>, <a href="#groovy_junit_test-deprecation">deprecation</a>,
                   <a href="#groovy_junit_test-exec_compatible_with">exec_compatible_with</a>, <a href="#groovy_junit_test-exec_group_compatible_with">exec_group_compatible_with</a>, <a href="#groovy_junit_test-exec_properties">exec_properties</a>, <a href="#groovy_junit_test-features">features</a>,
@@ -370,7 +464,7 @@ visibility — callers do not reach into it directly.
 ## groovy_test
 
 <pre>
-load("@rules_groovy//groovy:groovy.bzl", "groovy_test")
+load("@rules_groovy//groovy:defs.bzl", "groovy_test")
 
 groovy_test(*, <a href="#groovy_test-name">name</a>, <a href="#groovy_test-deps">deps</a>, <a href="#groovy_test-srcs">srcs</a>, <a href="#groovy_test-data">data</a>, <a href="#groovy_test-resources">resources</a>, <a href="#groovy_test-aspect_hints">aspect_hints</a>, <a href="#groovy_test-compatible_with">compatible_with</a>, <a href="#groovy_test-deprecation">deprecation</a>,
             <a href="#groovy_test-exec_compatible_with">exec_compatible_with</a>, <a href="#groovy_test-exec_group_compatible_with">exec_group_compatible_with</a>, <a href="#groovy_test-exec_properties">exec_properties</a>, <a href="#groovy_test-features">features</a>, <a href="#groovy_test-jvm_flags">jvm_flags</a>,
@@ -390,7 +484,7 @@ active toolchain owns the choice) at execution time.
 The default `src_roots` matches Maven-style layouts at the workspace
 root (`src/test/groovy`, `src/test/java`). Override it to host tests
 under arbitrary directory trees — e.g. `["example/foo/src/test/groovy"]`
-— without rewriting `groovy/groovy.bzl`.
+— without rewriting the call sites.
 
 For convenience wrappers around JUnit/Spock that also handle library
 splitting, see `groovy_junit_test`, `groovy_junit5_test`, and
@@ -435,7 +529,7 @@ toolchain's `dep_providers` (logical names like `"junit_runner"`,
 ## spock_test
 
 <pre>
-load("@rules_groovy//groovy:groovy.bzl", "spock_test")
+load("@rules_groovy//groovy:defs.bzl", "spock_test")
 
 spock_test(*, <a href="#spock_test-name">name</a>, <a href="#spock_test-deps">deps</a>, <a href="#spock_test-data">data</a>, <a href="#spock_test-resources">resources</a>, <a href="#spock_test-aspect_hints">aspect_hints</a>, <a href="#spock_test-compatible_with">compatible_with</a>, <a href="#spock_test-deprecation">deprecation</a>,
            <a href="#spock_test-exec_compatible_with">exec_compatible_with</a>, <a href="#spock_test-exec_group_compatible_with">exec_group_compatible_with</a>, <a href="#spock_test-exec_properties">exec_properties</a>, <a href="#spock_test-features">features</a>, <a href="#spock_test-groovy_srcs">groovy_srcs</a>,

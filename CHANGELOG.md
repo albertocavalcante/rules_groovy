@@ -55,6 +55,20 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ### Changed
 
+- New canonical public load surface at `@rules_groovy//groovy:defs.bzl`.
+  Every user-facing symbol (`groovy_library`, `groovy_and_java_library`,
+  `groovy_binary`, `groovy_test`, `groovy_junit_test`,
+  `groovy_junit5_test`, `spock_test`, `groovy_runtime`,
+  `groovy_toolchain`, `groovy_deps`, `GroovyToolchainInfo`,
+  `GroovyDepsInfo`, `GroovyLibraryInfo`, `path_to_class`) loads from a
+  single `.bzl`. Implementations split into one-responsibility files
+  under `groovy/private/` (`library.bzl`, `binary.bzl`, `test.bzl`,
+  `runtime.bzl`, `toolchain.bzl`). `groovy/groovy.bzl` and
+  `groovy/toolchain.bzl` keep working as deprecated back-compat shims
+  that re-export from `defs.bzl`; they are slated for removal in a
+  future release. README, `examples/*/BUILD.bazel`, internal `tests/`,
+  Stardoc inputs, and the extension-generated hub repo all point at
+  `defs.bzl`. (#26)
 - Public macros (`groovy_binary`, `groovy_and_java_library`,
   `groovy_test`, `groovy_junit_test`, `groovy_junit5_test`,
   `spock_test`) are now Bazel-8+ symbolic macros (`macro(...)`)
