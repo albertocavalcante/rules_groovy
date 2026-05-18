@@ -101,9 +101,9 @@ jobs:
         run: |
           bazel build --lockfile_mode=off //...
           # Bazel test returns exit 4 ("no test targets found") for
-          # `minimal_library`, `binary`, `multi_version`, and
-          # `long_classpath`. Tolerate that exit code specifically;
-          # let any other non-zero failure bubble up.
+          # `minimal_library`, `binary`, and `long_classpath`. Tolerate
+          # that exit code specifically; let any other non-zero failure
+          # bubble up.
           set +e
           bazel test --lockfile_mode=off --test_output=errors //...
           status=$?
@@ -120,16 +120,15 @@ jobs:
         working-directory: examples/multi_version
         run: |
           set -euo pipefail
-          # No flag — `:is_default`-gated registration picks the
-          # toolchain whose version equals DEFAULT_GROOVY_VERSION
-          # (currently 4.0.32).
-          bazel build --lockfile_mode=off //:lib
-          # Explicit Groovy 3.0.25.
-          bazel build --lockfile_mode=off \
-            --@rules_groovy//groovy/config_settings:groovy_version=3.0.25 //:lib
-          # Explicit Groovy 2.5.23.
-          bazel build --lockfile_mode=off \
-            --@rules_groovy//groovy/config_settings:groovy_version=2.5.23 //:lib
+          # The default `bazel test //...` step above already covered
+          # the no-flag case (`:is_default`-gated registration → Groovy
+          # 4.0.32). Here we exercise the explicit-value path for the
+          # other two SDKs end-to-end (compile + run) so the per-version
+          # selection is verified at runtime, not just at analysis time.
+          bazel test --lockfile_mode=off --test_output=errors \
+            --@rules_groovy//groovy/config_settings:groovy_version=3.0.25 //...
+          bazel test --lockfile_mode=off --test_output=errors \
+            --@rules_groovy//groovy/config_settings:groovy_version=2.5.23 //...
         env:
           USE_BAZEL_VERSION: '9.x'
 

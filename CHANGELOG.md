@@ -6,6 +6,22 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+
+- `examples/multi_version/`: the example no longer fails CI when
+  the toolchain's bundled Spock 1.3-groovy-2.5 is loaded onto every
+  compile classpath and then crashes against a flag-selected Groovy
+  3.0.x / 4.0.x toolchain
+  (`IncompatibleGroovyVersionException`). The example now opts out
+  of the toolchain's Spock wiring (`groovy.testing(junit = "4",
+  spock = False)`) and adds a `groovy_junit_test` so the per-version
+  selection is verified at runtime, not just at analysis. CI runs
+  the test under the default 4.0.32 toolchain plus the explicit
+  3.0.25 and 2.5.23 selections. The underlying architectural
+  cleanup (drop the `groovy.testing` tag class, let users supply
+  test framework deps via `rules_jvm_external`) is queued for v0.2
+  per `rules_groovy-plan/notes/roadmap-v0.1-v0.2.md`. (#29, ISSUE-071)
+
 ### Tests
 
 - `tests/hermeticity_test.bzl`: analysistest that introspects the
