@@ -53,6 +53,24 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - Root-level `REPO.bazel` declaring `default_visibility =
   ["//visibility:public"]`. (#20)
 
+### Documentation
+
+- README leads with `git_override` against a pinned commit (the only
+  way to consume the fork today; BCR publish is tracked separately).
+  Adds a "Pinning a Groovy version" subsection that walks the
+  `--@rules_groovy//groovy/config_settings:groovy_version` flag with
+  the `examples/multi_version/` snippet, and a "Using rules_groovy in
+  air-gapped or offline environments" section that points at the new
+  `docs/airgapped.md`. All `load()` snippets switched from the legacy
+  `groovy/groovy.bzl` path to the canonical
+  `@rules_groovy//groovy:defs.bzl` introduced by #26. (#27)
+- `docs/airgapped.md`: enumeration of every external download
+  (Groovy SDK + JUnit 4/5 + Spock + Hamcrest + JUnit-5 platform
+  transitive set), the known override gaps, and three end-to-end
+  `MODULE.bazel` recipes (restricted-egress mirror, full air-gap via
+  `rules_jvm_external` against internal Nexus, BYO SDK via
+  `groovy.local_toolchain`). (#27)
+
 ### Changed
 
 - Public macros (`groovy_binary`, `groovy_and_java_library`,
