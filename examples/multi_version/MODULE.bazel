@@ -12,9 +12,9 @@ groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
 # `@rules_groovy//groovy/config_settings:groovy_version` build flag
 # disambiguates at resolution time:
 #
-#   bazel build //:lib                                                  # default 4.0.32
-#   bazel build --@rules_groovy//groovy/config_settings:groovy_version=3.0.25 //:lib
-#   bazel build --@rules_groovy//groovy/config_settings:groovy_version=2.5.23 //:lib
+#   bazel test //...                                                    # default 4.0.32
+#   bazel test --@rules_groovy//groovy/config_settings:groovy_version=3.0.25 //...
+#   bazel test --@rules_groovy//groovy/config_settings:groovy_version=2.5.23 //...
 #
 # This is the example that surfaces ISSUE-064: before the
 # target_settings discriminator landed, all three `groovy.toolchain`
@@ -33,16 +33,35 @@ groovy.toolchain(
     version = "4.0.32",
 )
 
-# Testing config left at the implicit defaults; the rules_groovy
-# module's own `use_repo` line pulls in `junit_artifact` and the
-# example's `groovy_library` does not exercise test-runner wiring,
-# so the Spock-version mismatch across Groovy 2.5 / 3.0 / 4.0 doesn't
-# matter for this example. `multi_version` is about toolchain
-# *selection*, not test execution.
+# Opt out of Spock and stick with JUnit 4 for the test runner.
+#
+#   1. Spock pins to a specific Groovy major.minor; the toolchain
+#      otherwise picks the Spock release matching the *first*
+#      registered SDK (2.5.23 here) and folds Spock 1.3-groovy-2.5
+#      onto every compile classpath. groovyc then auto-loads the
+#      Spock global AST transform from that jar and fails with
+#      `IncompatibleGroovyVersionException` the moment the
+#      `groovy_version` flag selects Groovy 3.0 or 4.0. ISSUE-071.
+#   2. JUnit 4 (`org.junit.runner.JUnitCore`) is chosen over JUnit 5
+#      because each Groovy SDK distribution bundles its own copy of
+#      the JUnit 5 Platform jars under `lib/` (Groovy 2.5 ships
+#      Platform 1.4.2, Groovy 3.0 ships 1.12.0, Groovy 4.0 ships
+#      1.13.3). Those SDK-bundled jars land on the runtime classpath
+#      via `groovy_info.sdk_files`, where they collide with the
+#      toolchain's pinned Platform 1.14.4 from the testing tag and
+#      produce `NoSuchMethodError` at launch time. JUnit 4 has no
+#      such drift: all three SDKs bundle the identical
+#      `junit-4.13.2.jar`, and the toolchain's pinned JUnit 4 matches.
+#
+# Architectural simplification of this whole `groovy.testing` surface
+# is tracked for v0.2 — see `rules_groovy-plan/notes/roadmap-v0.1-v0.2.md`.
+groovy.testing(
+    junit = "4",
+    spock = False,
+)
 
 use_repo(
     groovy,
-    "junit_artifact",
     "groovy_toolchains",
 )
 register_toolchains("@groovy_toolchains//:all")
