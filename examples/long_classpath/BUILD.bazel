@@ -1,0 +1,67 @@
+# Copyright 2025-present Alberto Cavalcante. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("@bazel_skylib//rules:write_file.bzl", "write_file")
+load("@rules_groovy//groovy:defs.bzl", "groovy_library")
+
+# Long-classpath stress test (PR #28).
+#
+# Generates 100 trivial groovy_library targets and a single consumer
+# that lists every one of them in `deps`. The point is to exercise
+# the param-file path (ISSUE-050): a typical `groovyc -cp <100 jars>`
+# command line, with each jar path absolute under bazel-out, easily
+# exceeds Linux's ARG_MAX (~131 KB) and macOS's (~256 KB).
+#
+# Without the `use_param_file("@%s", use_always = True)` in
+# `groovy/private/actions.bzl`, the build would fail with
+# "Argument list too long" (errno E2BIG) on Linux once N gets large
+# enough. With param files, the whole classpath is materialized into
+# a single file and `groovyc` is invoked as `groovyc @<paramfile>`.
+#
+# A build of `//:consumer` is sufficient: if param-file emission
+# regresses, the action fails before we get any test output.
+
+# Generate Dep0..Dep99 source files at analysis time via write_file.
+# Avoids committing 100 trivial .groovy files for repo hygiene.
+[
+    write_file(
+        name = "gen_Dep{}".format(i),
+        out = "src/dep_{}/Dep{}.groovy".format(i, i),
+        content = [
+            "package dep_{}".format(i),
+            "",
+            "class Dep{} {{".format(i),
+            "    static String marker() {{ \"dep-{}\" }}".format(i),
+            "}",
+        ],
+    )
+    for i in range(100)
+]
+
+[
+    groovy_library(
+        name = "dep_{}".format(i),
+        srcs = [":gen_Dep{}".format(i)],
+    )
+    for i in range(100)
+]
+
+# The consumer compiles against all 100 transitive jars. Its compile
+# action's `-cp` argument carries every one of them — the regression
+# proxy for param-file correctness.
+groovy_library(
+    name = "consumer",
+    srcs = ["src/consumer/Consumer.groovy"],
+    deps = [":dep_{}".format(i) for i in range(100)],
+)

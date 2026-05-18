@@ -1,0 +1,56 @@
+# Copyright 2025-present Alberto Cavalcante. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load("@rules_groovy//groovy:defs.bzl", "groovy_library")
+
+# Reproducibility probe (PR #28).
+#
+# Builds a one-class `groovy_library` and emits a SHA-256 of its jar.
+# `diff_test` then compares the hash against a checked-in golden.
+# If `groovy_library` is byte-reproducible across rebuilds, the golden
+# matches every CI run; if Groovyc, singlejar, or any wrapping action
+# introduces non-determinism, this test breaks and the gap surfaces
+# as a real CI failure rather than getting buried in folklore.
+#
+# Caveat: see README.md. The first run produces the jar; the human
+# operator regenerates `golden_jar_sha256.txt` from `bazel-bin` and
+# commits it. Subsequent runs assert byte-identity.
+
+groovy_library(
+    name = "hello",
+    srcs = ["src/main/groovy/hello/Hello.groovy"],
+)
+
+# Hash the jar produced by `:hello`. `shasum -a 256` is portable on
+# both Linux (coreutils) and macOS (BSD); the output is `<hex>  <path>`
+# so we cut the hash field to keep the golden free of path noise.
+#
+# `tools = [":hello"]` (not `srcs`) is intentional: we want the
+# compiled jar in the genrule's `$(execpath)` resolution.
+genrule(
+    name = "hello_jar_sha256",
+    srcs = [":hello"],
+    outs = ["hello_jar_sha256.txt"],
+    cmd = "shasum -a 256 $(execpath :hello) | cut -d' ' -f1 > $@",
+)
+
+# diff_test fails the test invocation if the computed hash differs
+# from the golden. Comment this target out (and leave the genrule)
+# if you are seeding the golden for the first time.
+diff_test(
+    name = "reproducibility_test",
+    file1 = ":hello_jar_sha256.txt",
+    file2 = "golden_jar_sha256.txt",
+)

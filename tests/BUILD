@@ -1,5 +1,6 @@
 load("@rules_java//java:defs.bzl", "java_binary", "java_library")
-load("//groovy:defs.bzl", "groovy_deps", "groovy_toolchain")
+load("//groovy:defs.bzl", "groovy_deps", "groovy_library", "groovy_toolchain")
+load(":hermeticity_test.bzl", "hermeticity_test")
 load(
     ":path_to_class_test.bzl",
     "custom_root_test",
@@ -138,5 +139,27 @@ test_suite(
         ":path_to_class_default_roots_test",
         ":path_to_class_longest_prefix_wins_test",
         ":path_to_class_no_match_failure_test",
+    ],
+)
+
+# Hermeticity coverage (PR #28) ---------------------------------------------
+#
+# A tiny real groovy_library so the analysistest can introspect the
+# Groovyc + GroovySingleJar actions via `analysistest.target_actions`.
+groovy_library(
+    name = "hermeticity_fixture",
+    srcs = ["HermeticityFixture.groovy"],
+    tags = ["manual"],
+)
+
+hermeticity_test(
+    name = "hermeticity_analysis_test",
+    target_under_test = ":hermeticity_fixture",
+)
+
+test_suite(
+    name = "all_hermeticity_tests",
+    tests = [
+        ":hermeticity_analysis_test",
     ],
 )
