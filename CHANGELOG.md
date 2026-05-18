@@ -8,6 +8,19 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ### Added
 
+- `@rules_groovy//groovy:runtime` target exposing the toolchain's
+  resolved Groovy SDK runtime jar as a `JavaInfo`-providing target.
+  Useful for plain `java_binary` and other non-`groovy_*` rules that
+  need Groovy on their runtime classpath. Resolves via the
+  `groovy_version` build flag introduced in #22, so the jar always
+  matches the toolchain every other rule in this set is using. (#23,
+  ISSUE-065)
+- `examples/codenarc/`: CodeNarc as a `bazel test //:codenarc` target
+  via `sh_test` + `java_binary`, consuming
+  `@rules_groovy//groovy:runtime`. Pattern for static-analysis
+  integration on Groovy sources without rules_groovy having to ship a
+  CodeNarc-specific rule (a rules_lint upstream contribution is
+  tracked separately as ISSUE-066). (#23)
 - `GroovyLibraryInfo` provider, returned alongside `JavaInfo` by every
   `groovy_library` target. Carries the source-file `depset` for future
   `gazelle-groovy` and strict-deps tooling. Field list is intentionally

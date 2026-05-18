@@ -51,6 +51,26 @@ Compile Groovy (and optionally Java) sources into a JVM library jar. Returns `Ja
 | <a id="groovy_library-runtime_deps"></a>runtime_deps |  Runtime-only deps. Not on compile classpath.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 
 
+<a id="groovy_runtime"></a>
+
+## groovy_runtime
+
+<pre>
+load("@rules_groovy//groovy:groovy.bzl", "groovy_runtime")
+
+groovy_runtime(<a href="#groovy_runtime-name">name</a>)
+</pre>
+
+Exposes the active Groovy toolchain's resolved runtime jar as a `JavaInfo`-providing target. Useful for non-`groovy_*` rules (e.g. plain `java_binary`) that need Groovy on their runtime classpath — list `@rules_groovy//groovy:runtime` in `runtime_deps`. Resolves via the active toolchain, including the per-version selection driven by the `groovy_version` build flag (PR #22), so the jar always matches the toolchain every other rule in this set is using.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="groovy_runtime-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+
+
 <a id="groovy_and_java_library"></a>
 
 ## groovy_and_java_library

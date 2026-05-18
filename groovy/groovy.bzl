@@ -166,6 +166,44 @@ _groovy_sdk_runtime = rule(
 )
 
 # ---------------------------------------------------------------------------
+# groovy_runtime — public rule exposing the toolchain's resolved Groovy SDK
+# runtime jar as a `JavaInfo`-providing target. Stable label declared at
+# `@rules_groovy//groovy:runtime` in `groovy/BUILD`.
+#
+# Reason for existing: the `groovy_*` rules in this set resolve the toolchain
+# directly and pull `groovy_info.runtime_jar` off it. Downstream rules without
+# toolchain access (e.g. plain `java_binary` running a Groovy program like
+# CodeNarc) have no stable label to put Groovy on their runtime classpath
+# after PR #21 collapsed the extension's `use_repo` exposure to just
+# `groovy_toolchains`. This rule is that label.
+#
+# Per-version selection via the `groovy_version` build flag (PR #22) works
+# transparently: the rule depends on `//groovy:toolchain_type` and Bazel's
+# toolchain resolution machinery picks the matching toolchain.
+# ---------------------------------------------------------------------------
+
+def _groovy_runtime_impl(ctx):
+    java_info = _sdk_runtime_javainfo(ctx)
+    return [
+        DefaultInfo(files = depset([ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].groovy_info.runtime_jar])),
+        java_info,
+    ]
+
+groovy_runtime = rule(
+    implementation = _groovy_runtime_impl,
+    toolchains = [GROOVY_TOOLCHAIN_TYPE],
+    provides = [JavaInfo],
+    doc = "Exposes the active Groovy toolchain's resolved runtime jar as a " +
+          "`JavaInfo`-providing target. Useful for non-`groovy_*` rules " +
+          "(e.g. plain `java_binary`) that need Groovy on their runtime " +
+          "classpath — list `@rules_groovy//groovy:runtime` in `runtime_deps`. " +
+          "Resolves via the active toolchain, including the per-version " +
+          "selection driven by the `groovy_version` build flag (PR #22), so " +
+          "the jar always matches the toolchain every other rule in this set " +
+          "is using.",
+)
+
+# ---------------------------------------------------------------------------
 # groovy_and_java_library — deprecated alias. Forwards to `groovy_library`,
 # which since this PR accepts mixed `.groovy` + `.java` srcs natively via
 # groovyc joint compilation.
