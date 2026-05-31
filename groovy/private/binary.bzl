@@ -24,8 +24,8 @@ than a literal `@groovy_sdk_artifact//:groovy` label so the rules' own
 because `rules_java`'s exported `java_binary` is a legacy `def`-based
 wrapper and `native.java_binary`'s introspectable attr surface is
 empty. The macro therefore declares the `java_binary` attrs it cares
-about explicitly and forwards them through, matching the original PR-25
-shape from `groovy/groovy.bzl`.
+about explicitly and forwards them through, matching the original
+PR-25 shape.
 """
 
 load("@rules_java//java:defs.bzl", "JavaInfo", "java_binary")

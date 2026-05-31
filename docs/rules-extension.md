@@ -30,8 +30,8 @@ The extension emits:
     implicit default; `<tag.name>_sdk` for explicit tags so multi-version
     builds get predictable names);
   * one `http_jar` per pinned-default test artifact (legacy compat names
-    `junit_artifact` / `spock_artifact` kept so the un-touched
-    `groovy/groovy.bzl` macros still resolve them);
+    `junit_artifact` / `spock_artifact` kept until ISSUE-061 rewires
+    test rules off literal-label references);
   * a `@groovy_artifacts` hub repo aliasing all test deps by logical name;
   * a `@groovy_toolchains` hub repo with `groovy_toolchain` +
     `groovy_deps` + `toolchain(...)` per SDK and a `:all` filegroup.

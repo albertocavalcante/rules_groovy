@@ -191,10 +191,7 @@ Nexus, BYO SDK), and the current override gaps live in
 ## Rule reference
 
 `@rules_groovy//groovy:defs.bzl` is the single canonical load surface
-for every public symbol — rules, providers, and helpers. The legacy
-`groovy/groovy.bzl` and `groovy/toolchain.bzl` files remain as
-deprecated shims that re-export from `defs.bzl`; they are slated for
-removal in a future release.
+for every public symbol — rules, providers, and helpers.
 
 Stardoc keeps the per-symbol docs in sync with the source — see
 `docs/BUILD.bazel`.

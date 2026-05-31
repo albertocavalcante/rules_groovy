@@ -6,6 +6,21 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Removed
+
+- `groovy/groovy.bzl` and `groovy/toolchain.bzl`, the deprecated
+  back-compat shims that re-exported public macros / providers from
+  `defs.bzl`. PR #26 marked them "slated for removal in a future
+  release"; verification on 2026-05-31 found zero `load(...)` callers
+  anywhere in the live tree (`groovy/`, `tests/`, `docs/`, `examples/`,
+  `MODULE.bazel`, or the extension-generated hub repo). Pre-1.0 the
+  removal carries no compatibility cost, and ADR-001 prefers an honest
+  deletion over a permanent re-export. Downstream code that still
+  loads from the legacy paths must switch to
+  `load("@rules_groovy//groovy:defs.bzl", ...)`. The associated
+  `groovy_bzl` and `toolchain_bzl` `bzl_library` targets are removed
+  from `groovy/BUILD` as well. (ISSUE-077)
+
 ### Fixed
 
 - `examples/multi_version/`: the example no longer fails CI when

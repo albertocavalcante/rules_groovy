@@ -50,14 +50,13 @@ bazel_dep(name = "stardoc", version = "0.8.1", dev_dependency = True)
 # the build pins.
 groovy = use_extension("//groovy:extensions.bzl", "groovy")
 
-# Since ISSUE-061's cleanup (PR #21), `groovy/groovy.bzl` no longer
-# references `@junit_artifact`, `@spock_artifact`, or
-# `@groovy_sdk_artifact` by literal label — test rules pull JUnit /
-# Spock / SDK jars off the toolchain's `dep_providers`, and
-# `groovy_binary` injects the SDK runtime jar via a hidden
-# `_groovy_sdk_runtime` helper rule. `groovy_toolchains` is the single
-# user-facing repo; everything else stays internal to the extension's
-# hub.
+# `groovy_toolchains` is the single user-facing repo: it holds the
+# `groovy_toolchain` instances that `register_toolchains(...)` below
+# resolves. Every other repo the extension fetches (SDK jars, JUnit,
+# Spock, Hamcrest) stays internal to the hub — rule implementations
+# read jars off the toolchain's `dep_providers`, not by literal
+# `@junit_artifact` / `@spock_artifact` / `@groovy_sdk_artifact`
+# labels.
 use_repo(groovy, "groovy_toolchains")
 
 register_toolchains("@groovy_toolchains//:all")
