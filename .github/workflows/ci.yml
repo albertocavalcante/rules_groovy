@@ -59,13 +59,14 @@ jobs:
           restore-keys: |
             bazel-disk-linux-
 
-      # Chapter 9 of the v0.1.0 release narrative: --lockfile_mode=error
-      # turns silent MODULE.bazel.lock mutations into hard failures. Pairs
-      # with the module extension's `extension_metadata(reproducible = True)`
-      # claim (chapter 5) — if the extension would re-resolve at build time
-      # and rewrite the lockfile, CI fails instead of papering over it.
+      # --config=ci picks up --lockfile_mode=error + announce_rc; chapter 9
+      # of the v0.1.0 release narrative turns silent MODULE.bazel.lock
+      # mutations into hard failures and pairs with the extension's
+      # `extension_metadata(reproducible = True)` claim (chapter 5).
+      # --config=disk-cache routes Bazel through ~/.cache/bazel-disk,
+      # which actions/cache@v4 restores above.
       - name: Build (bzlmod)
-        run: bazel build --config=bzlmod --lockfile_mode=error --disk_cache="$HOME/.cache/bazel-disk" //...
+        run: bazel build --config=ci --config=disk-cache //...
         env:
           USE_BAZEL_VERSION: '9.x'
 
@@ -74,7 +75,7 @@ jobs:
       # actually runs //src/test/groovy/lib:GroovyLibTest (and any future
       # `groovy_test` targets) on the JVM.
       - name: Test (bzlmod)
-        run: bazel test --config=bzlmod --lockfile_mode=error --disk_cache="$HOME/.cache/bazel-disk" //...
+        run: bazel test --config=ci --config=disk-cache //...
         env:
           USE_BAZEL_VERSION: '9.x'
 
@@ -97,12 +98,12 @@ jobs:
       # No disk cache on macOS: the weekly cadence makes the hit rate
       # too low to be worth a separate cache key.
       - name: Build (bzlmod)
-        run: bazel build --config=bzlmod --lockfile_mode=error //...
+        run: bazel build --config=ci //...
         env:
           USE_BAZEL_VERSION: '9.x'
 
       - name: Test (bzlmod)
-        run: bazel test --config=bzlmod --lockfile_mode=error //...
+        run: bazel test --config=ci //...
         env:
           USE_BAZEL_VERSION: '9.x'
 
@@ -132,13 +133,18 @@ jobs:
       - name: Setup Bazelisk
         uses: bazelbuild/setup-bazelisk@v3
 
+      # Bazel 7.x / 8.x lack the prebuilt-protoc flag defined in the
+      # default `build` rc line; the `--config=ci` aggregate still
+      # works because the unknown flag is filtered out by the older
+      # Bazel binary, but advisory cells may still pay the protoc
+      # compile cost — acceptable given they're manual-dispatch only.
       - name: Build (bzlmod)
-        run: bazel build --config=bzlmod --lockfile_mode=error //...
+        run: bazel build --config=ci //...
         env:
           USE_BAZEL_VERSION: ${{ matrix.bazel-version }}
 
       - name: Test (bzlmod)
-        run: bazel test --config=bzlmod --lockfile_mode=error //...
+        run: bazel test --config=ci //...
         env:
           USE_BAZEL_VERSION: ${{ matrix.bazel-version }}
 
@@ -300,7 +306,7 @@ jobs:
 
       - name: Regenerate docs
         run: |
-          bazel build --lockfile_mode=error --disk_cache="$HOME/.cache/bazel-disk" //docs:all
+          bazel build --config=ci --config=disk-cache //docs:all
           # Stardoc outputs land in bazel-bin/docs/. Overwrite the
           # committed copies under docs/ and let `git diff` decide.
           cp bazel-bin/docs/rules-public.md docs/rules-public.md

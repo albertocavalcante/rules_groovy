@@ -64,11 +64,14 @@ That single dispatch exercises the macOS Bazel 9 cell **and** the four advisory 
 
 ## Local verification before opening a PR
 
+The repo's `.bazelrc` defines a `--config=ci` aggregate that mirrors what CI runs (`--lockfile_mode=error`, sane terminal/colour settings, `--test_output=errors` for tests). Pair it with `--config=disk-cache` to use the same on-disk action cache as CI.
+
 ```
-bazel build //...
-bazel test //...
-bazel build --lockfile_mode=error //...
+bazel build --config=ci --config=disk-cache //...
+bazel test  --config=ci --config=disk-cache //...
 ```
+
+Plain `bazel build //...` also works for quick local checks; you'll lose the strict lockfile gate and the disk-cache routing, but the prebuilt-protoc flag (set unconditionally at the top of `.bazelrc`) and the `remotejdk_11` Java runtime still apply.
 
 To match the buildifier CI gate, auto-format `.bzl` / `BUILD` / `MODULE.bazel` / `REPO.bazel` files before pushing:
 

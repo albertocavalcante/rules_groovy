@@ -35,6 +35,44 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ### CI
 
+- Bazel 9 prebuilt `protoc` enabled (ISSUE-079). Adds
+  `--@protobuf//bazel/toolchains:prefer_prebuilt_protoc=true` to the
+  unconditional `build` section of `.bazelrc`. Available under
+  protobuf 33.4 (already in `MODULE.bazel.lock`); skips the C++
+  compile of `protoc` that Stardoc + `rules_java` would otherwise
+  trigger on cold CI cells. `MODULE.bazel` gains a direct
+  `bazel_dep(name = "protobuf", version = "33.4")` so the
+  `@protobuf` short name resolves from the root `.bazelrc` — the
+  same protobuf version is already pulled transitively through
+  `rules_java`, so the line does not change the locked module
+  graph. Flag location is `bazel/toolchains` in protobuf 33.4;
+  later protobuf releases move it to `bazel/flags` with an alias,
+  so the `bazel/toolchains` path keeps working. Protobuf v34 will
+  flip the default to `true` and the explicit line can be removed
+  then. The flag is intentionally NOT added to the per-example
+  `.bazelrc`s — each `examples/<name>/MODULE.bazel` does not
+  declare a direct dependency on `protobuf` (it's a downstream
+  consumer demo), so `@protobuf` is not visible from those modules.
+  Examples will still hit a cold protoc compile on the first
+  example per CI runner, then warm-cache subsequent examples via
+  the disk cache from ISSUE-078.
+
+- `.bazelrc` refactored into `--config=`-layered sections
+  (ISSUE-079). The unconditional defaults remain at the top (bzlmod
+  + `--java_runtime_version=remotejdk_11` + the new prebuilt-protoc
+  flag). Two new configs:
+    * `--config=ci` — CI cell defaults: `--announce_rc`,
+      `--color=yes`, `--terminal_columns=120`,
+      `--lockfile_mode=error`, and `test:ci --test_output=errors`.
+    * `--config=disk-cache` — pins `--disk_cache=~/.cache/bazel-disk`,
+      pairing with the `actions/cache@v4` step from ISSUE-078.
+  Every workflow `bazel build` / `bazel test` switches from inline
+  flags (`--config=bzlmod --lockfile_mode=error --disk_cache=...`)
+  to `--config=ci --config=disk-cache`. The `:bzlmod` no-op alias
+  is retained for legacy callers. The remote-cache configs
+  (`--config=remote-cache` and `--config=remote-cache-write`) land
+  separately in ISSUE-080.
+
 - Workflow trimmed for budget reality (ISSUE-078). May 2026 metered
   usage showed `rules_groovy` consumed $37.62 gross of GitHub Actions
   minutes — 54% of the account total and enough to drain the 2,000-min

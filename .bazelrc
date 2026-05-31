@@ -1,8 +1,59 @@
+# ============================================================
+# rules_groovy .bazelrc
+#
+# Layout: unconditional defaults at the top, then `--config=NAME`
+# sections below. Local devs run plain `bazel build //...`; CI uses
+# `--config=ci --config=disk-cache` (and, once ISSUE-080 lands,
+# optionally `--config=remote-cache` or `--config=remote-cache-write`).
+#
+# See:
+#   rules_groovy-plan/decisions/ADR-005-bazel-9-baseline.md
+#   rules_groovy-plan/notes/prebuilt-protoc-and-remote-cache-2026-05-31.md
+# ============================================================
+
+# ------------------------------------------------------------
+# Unconditional defaults
+# ------------------------------------------------------------
+# bzlmod is the only supported resolution mode (ADR-005).
 common --enable_bzlmod
 
-# Bazel 9 has bzlmod on by default. `--config=bzlmod` is kept as a
-# no-op alias so the CI workflow's legacy invocation continues to
-# work and users on Bazel 7/8 can opt in explicitly.
+# Bazel 9 prebuilt protoc — skip the C++ compile of protoc. Available
+# under protobuf 33.4+ (already in MODULE.bazel.lock). The flag lives
+# at //bazel/toolchains in 33.4; protobuf post-33.4 moved it to
+# //bazel/flags and aliased the old path. We pin to the 33.4 location
+# explicitly to avoid breakage if the lock advances to a version that
+# only ships the new path (the alias should land at the same point).
+# See https://protobuf.dev/news/2026-01-16/ and v33.4 BUILD file at
+# https://github.com/protocolbuffers/protobuf/blob/v33.4/bazel/toolchains/BUILD.
+build --@protobuf//bazel/toolchains:prefer_prebuilt_protoc=true
+
+# Pin the JDK used to run Java actions (groovyc launcher, junit, etc).
+build --java_runtime_version=remotejdk_11
+
+# ------------------------------------------------------------
+# Legacy alias — `--config=bzlmod` is a no-op kept for older CI
+# invocations and external callers that still pass it explicitly.
+# Safe to remove once no one references it.
+# ------------------------------------------------------------
 common:bzlmod --enable_bzlmod
 
-build --java_runtime_version=remotejdk_11
+# ------------------------------------------------------------
+# --config=ci — CI cell defaults
+# Used by every job in .github/workflows/ci.yml.
+# ------------------------------------------------------------
+build:ci --announce_rc
+build:ci --color=yes
+build:ci --terminal_columns=120
+# Chapter 9 of the v0.1.0 release narrative: --lockfile_mode=error
+# turns silent MODULE.bazel.lock mutations into hard failures.
+build:ci --lockfile_mode=error
+test:ci  --test_output=errors
+
+# ------------------------------------------------------------
+# --config=disk-cache — persistent on-disk action cache
+# Pairs with actions/cache@v4 in CI; locally, set this on a fast SSD
+# path to recover between `bazel clean` runs. The path uses Bazel's
+# `~` expansion, so $HOME/.cache/bazel-disk on linux and
+# /Users/<user>/.cache/bazel-disk on macOS.
+# ------------------------------------------------------------
+build:disk-cache --disk_cache=~/.cache/bazel-disk

@@ -8,6 +8,14 @@ module(
 
 bazel_dep(name = "rules_java", version = "9.6.1")
 
+# Protobuf is already pulled transitively by rules_java; declaring it
+# directly here makes `@protobuf` visible under its short name from the
+# root .bazelrc, which is required to set
+#   --@protobuf//bazel/flags:prefer_prebuilt_protoc=true
+# (the Bazel-9 + protobuf-33.4 prebuilt-protoc flag). Version pinned to
+# match what rules_java resolves so this line never affects the lock.
+bazel_dep(name = "protobuf", version = "33.4")
+
 # rules_shell wraps the bundled `bin/groovyc` POSIX launcher as an
 # sh_binary inside the generated SDK repo. The wrapper lives at
 # //groovy/private:groovyc_wrapper.sh and is staged into every
