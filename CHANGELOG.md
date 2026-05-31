@@ -35,6 +35,36 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ### CI
 
+- Workflow trimmed for budget reality (ISSUE-078). May 2026 metered
+  usage showed `rules_groovy` consumed $37.62 gross of GitHub Actions
+  minutes — 54% of the account total and enough to drain the 2,000-min
+  free pool and trip the account-level spending cap, which stopped
+  Actions across all of `albertocavalcante` until reset. Three
+  structural changes:
+    * macOS Bazel 9.x cell moved from per-PR to weekly cron (Mondays
+      03:17 UTC) plus manual `workflow_dispatch`. macOS minutes are
+      10x linux on GitHub Actions; per-PR macOS was ~67% of the entire
+      workflow cost for marginal extra signal. Darwin-only regressions
+      now surface within 7 days, which is well inside any downstream
+      consumer feedback loop. Pre-release confidence is restored by
+      firing `workflow_dispatch` before tagging — see CONTRIBUTING.md.
+    * Bazel 7.x / 8.x advisory cells (4 entries) moved to a separate
+      `build-advisory` job gated on `workflow_dispatch` with an
+      explicit `run_advisory=true` input. ADR-005 keeps Bazel 9 as
+      the only supported target, and the advisory cells were red on
+      PR #31 anyway — keeping them per-PR cost ~$11/month for zero
+      acted-on signal. They remain available for pre-release smoke.
+    * All linux jobs (`build-linux`, `examples`, `docs-regen-check`)
+      gain a Bazel disk cache via `actions/cache@v4`, keyed on
+      `MODULE.bazel.lock` (or each example's own `MODULE.bazel` for
+      the examples matrix). Cold-start drops from ~30-60s to ~5s on
+      cache hit; SDK and Maven artifact downloads are skipped. Pass
+      `--disk_cache=$HOME/.cache/bazel-disk` to `bazel build`/`test`.
+  Projected reduction: ~$37/month gross -> ~$5/month gross (~85%).
+  The required-cell list shrinks to `build-linux`, `examples`,
+  `buildifier`, and `docs regen check` — the macOS cell and the four
+  advisory cells no longer appear on PRs and so do not gate merges.
+
 - New `buildifier` job in `.github/workflows/ci.yml`. Runs
   `buildifier --mode=check --lint=warn` over `groovy/`, `tests/`,
   `docs/`, `MODULE.bazel`, and `REPO.bazel` on every PR. Pinned to

@@ -5,6 +5,20 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Weekly macOS smoke (Mondays 03:17 UTC). macOS minutes are 10x
+    # linux on GitHub Actions; per-PR macOS dominated 67% of the CI
+    # budget for marginal extra signal. Weekly cron catches platform
+    # regressions within 7 days, well inside any downstream feedback
+    # loop. See ISSUE-078 and
+    # rules_groovy-plan/notes/ci-cost-reduction-2026-05-31.md.
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      run_advisory:
+        description: 'Run Bazel 7.x / 8.x advisory cells'
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,28 +26,18 @@ concurrency:
 
 # Per rules_groovy-plan/decisions/ADR-005-bazel-9-baseline.md:
 # Bazel 9.x is the supported baseline (required, blocks merges).
-# Bazel 7.x and 8.x cells are advisory — they run on every PR for
-# regression signal but don't gate merges. WORKSPACE is gone in
-# v0.1.0 (chapter 7); only bzlmod cells remain.
+# Bazel 7.x and 8.x cells are advisory — they live in build-advisory
+# below and run only on workflow_dispatch with `run_advisory=true`.
+# Before tagging any release, fire workflow_dispatch with
+# `run_advisory=true` to exercise the full historical matrix; the
+# recipe is documented in CONTRIBUTING.md.
 
 jobs:
-  build:
-    name: "${{ matrix.mode }} / ${{ matrix.os }} / Bazel ${{ matrix.bazel-version }}${{ matrix.advisory && ' (advisory)' || '' }}"
-    runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.advisory }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Required: Bazel 9 + bzlmod (the supported baseline).
-          - { os: ubuntu-latest, bazel-version: '9.x', mode: bzlmod, advisory: false }
-          - { os: macos-latest,  bazel-version: '9.x', mode: bzlmod, advisory: false }
-          # Advisory: older Bazel + bzlmod.
-          - { os: ubuntu-latest, bazel-version: '8.x', mode: bzlmod, advisory: true }
-          - { os: macos-latest,  bazel-version: '8.x', mode: bzlmod, advisory: true }
-          - { os: ubuntu-latest, bazel-version: '7.x', mode: bzlmod, advisory: true }
-          - { os: macos-latest,  bazel-version: '7.x', mode: bzlmod, advisory: true }
-
+  build-linux:
+    # Required: Bazel 9 + bzlmod + ubuntu on every event (push, PR,
+    # cron, dispatch). The supported baseline.
+    name: "bzlmod / ubuntu-latest / Bazel 9.x"
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,23 +45,99 @@ jobs:
       - name: Setup Bazelisk
         uses: bazelbuild/setup-bazelisk@v3
 
+      # ISSUE-078: cache the Bazel disk cache keyed on MODULE.bazel.lock.
+      # MODULE.bazel.lock rarely changes between PRs; cache hits trim
+      # cold-start from ~30-60s to ~5s and skip the SDK + Maven artifact
+      # downloads. `restore-keys` falls back to the most recent
+      # bazel-disk-linux-* cache when the exact lock hash misses, letting
+      # Bazel re-resolve only what's actually outdated.
+      - name: Cache Bazel disk cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-disk
+          key: bazel-disk-linux-${{ hashFiles('MODULE.bazel.lock') }}
+          restore-keys: |
+            bazel-disk-linux-
+
       # Chapter 9 of the v0.1.0 release narrative: --lockfile_mode=error
       # turns silent MODULE.bazel.lock mutations into hard failures. Pairs
       # with the module extension's `extension_metadata(reproducible = True)`
       # claim (chapter 5) — if the extension would re-resolve at build time
       # and rewrite the lockfile, CI fails instead of papering over it.
       - name: Build (bzlmod)
-        if: matrix.mode == 'bzlmod'
-        run: bazel build --config=bzlmod --lockfile_mode=error //...
+        run: bazel build --config=bzlmod --lockfile_mode=error --disk_cache="$HOME/.cache/bazel-disk" //...
         env:
-          USE_BAZEL_VERSION: ${{ matrix.bazel-version }}
+          USE_BAZEL_VERSION: '9.x'
 
       # Chapter 9 — execute-time coverage. Compile-time correctness was
       # established by the chapter-4 hermetic-actions rewrite; this step
       # actually runs //src/test/groovy/lib:GroovyLibTest (and any future
       # `groovy_test` targets) on the JVM.
       - name: Test (bzlmod)
-        if: matrix.mode == 'bzlmod'
+        run: bazel test --config=bzlmod --lockfile_mode=error --disk_cache="$HOME/.cache/bazel-disk" //...
+        env:
+          USE_BAZEL_VERSION: '9.x'
+
+  build-macos:
+    # macOS is 10x the per-minute cost on GitHub Actions. Run weekly
+    # (Monday 03:17 UTC) plus on manual workflow_dispatch (pre-release
+    # confidence). Never on PRs or individual main pushes — Darwin
+    # regressions surface within 7 days, well inside any downstream
+    # consumer feedback loop. See ISSUE-078.
+    name: "bzlmod / macos-latest / Bazel 9.x"
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bazelisk
+        uses: bazelbuild/setup-bazelisk@v3
+
+      # No disk cache on macOS: the weekly cadence makes the hit rate
+      # too low to be worth a separate cache key.
+      - name: Build (bzlmod)
+        run: bazel build --config=bzlmod --lockfile_mode=error //...
+        env:
+          USE_BAZEL_VERSION: '9.x'
+
+      - name: Test (bzlmod)
+        run: bazel test --config=bzlmod --lockfile_mode=error //...
+        env:
+          USE_BAZEL_VERSION: '9.x'
+
+  build-advisory:
+    # ADR-005 keeps Bazel 9 as the only supported target. The 7.x / 8.x
+    # cells exist for regression signal but were red on PR #31 and
+    # nobody acts on them — at ~$0.09 per push * ~125 pushes per month
+    # that's ~$11/month for zero acted-on coverage. Gate them behind
+    # manual dispatch so they can be fired before a release without
+    # spending per-PR. See ISSUE-078.
+    name: "bzlmod / ${{ matrix.os }} / Bazel ${{ matrix.bazel-version }} (advisory)"
+    if: github.event_name == 'workflow_dispatch' && inputs.run_advisory
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, bazel-version: '8.x' }
+          - { os: macos-latest,  bazel-version: '8.x' }
+          - { os: ubuntu-latest, bazel-version: '7.x' }
+          - { os: macos-latest,  bazel-version: '7.x' }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bazelisk
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Build (bzlmod)
+        run: bazel build --config=bzlmod --lockfile_mode=error //...
+        env:
+          USE_BAZEL_VERSION: ${{ matrix.bazel-version }}
+
+      - name: Test (bzlmod)
         run: bazel test --config=bzlmod --lockfile_mode=error //...
         env:
           USE_BAZEL_VERSION: ${{ matrix.bazel-version }}
@@ -66,13 +146,16 @@ jobs:
     # Per-example downstream-integration tests. Each `examples/<name>/`
     # is its own Bazel module that depends on `rules_groovy` via
     # `local_path_override`. Building from inside each directory
-    # exercises the public `load("@rules_groovy//groovy:groovy.bzl",
-    # ...)` path the way a real downstream consumer would, which the
-    # in-tree `example/` (now deleted) couldn't do because it shared
-    # the rules' own MODULE.bazel.
+    # exercises the canonical public `load("@rules_groovy//groovy:defs.bzl",
+    # ...)` path the way a real downstream consumer would.
+    #
+    # ISSUE-078: needs build-linux (the always-on baseline) rather than
+    # the old monolithic `build` job that was split this PR. Per-example
+    # disk cache keyed on each example's own MODULE.bazel — the rules
+    # repo's MODULE.bazel.lock is irrelevant downstream.
     name: "examples / ${{ matrix.example }}"
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-linux
     strategy:
       fail-fast: false
       matrix:
@@ -96,16 +179,25 @@ jobs:
       - name: Setup Bazelisk
         uses: bazelbuild/setup-bazelisk@v3
 
+      - name: Cache Bazel disk cache (per example)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-disk
+          key: bazel-disk-examples-${{ matrix.example }}-${{ hashFiles(format('examples/{0}/MODULE.bazel', matrix.example)) }}
+          restore-keys: |
+            bazel-disk-examples-${{ matrix.example }}-
+            bazel-disk-examples-
+
       - name: Build + test example
         working-directory: examples/${{ matrix.example }}
         run: |
-          bazel build --lockfile_mode=off //...
+          bazel build --lockfile_mode=off --disk_cache="$HOME/.cache/bazel-disk" //...
           # Bazel test returns exit 4 ("no test targets found") for
           # `minimal_library`, `binary`, and `long_classpath`. Tolerate
           # that exit code specifically; let any other non-zero failure
           # bubble up.
           set +e
-          bazel test --lockfile_mode=off --test_output=errors //...
+          bazel test --lockfile_mode=off --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors //...
           status=$?
           if [ $status -eq 4 ]; then
             echo "Example has no test targets; build alone is sufficient."
@@ -121,13 +213,13 @@ jobs:
         run: |
           set -euo pipefail
           # The default `bazel test //...` step above already covered
-          # the no-flag case (`:is_default`-gated registration → Groovy
+          # the no-flag case (`:is_default`-gated registration -> Groovy
           # 4.0.32). Here we exercise the explicit-value path for the
           # other two SDKs end-to-end (compile + run) so the per-version
           # selection is verified at runtime, not just at analysis time.
-          bazel test --lockfile_mode=off --test_output=errors \
+          bazel test --lockfile_mode=off --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors \
             --@rules_groovy//groovy/config_settings:groovy_version=3.0.25 //...
-          bazel test --lockfile_mode=off --test_output=errors \
+          bazel test --lockfile_mode=off --disk_cache="$HOME/.cache/bazel-disk" --test_output=errors \
             --@rules_groovy//groovy/config_settings:groovy_version=2.5.23 //...
         env:
           USE_BAZEL_VERSION: '9.x'
@@ -198,9 +290,17 @@ jobs:
         env:
           USE_BAZEL_VERSION: '9.x'
 
+      - name: Cache Bazel disk cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-disk
+          key: bazel-disk-docs-${{ hashFiles('MODULE.bazel.lock') }}
+          restore-keys: |
+            bazel-disk-docs-
+
       - name: Regenerate docs
         run: |
-          bazel build --lockfile_mode=error //docs:all
+          bazel build --lockfile_mode=error --disk_cache="$HOME/.cache/bazel-disk" //docs:all
           # Stardoc outputs land in bazel-bin/docs/. Overwrite the
           # committed copies under docs/ and let `git diff` decide.
           cp bazel-bin/docs/rules-public.md docs/rules-public.md
