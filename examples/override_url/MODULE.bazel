@@ -1,0 +1,24 @@
+module(name = "rules_groovy_example_override_url", version = "0.0.0")
+
+bazel_dep(name = "rules_groovy", version = "0.0.0")
+local_path_override(
+    module_name = "rules_groovy",
+    path = "../..",
+)
+
+groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
+
+# Override the download URL for a registry-known version. The registry
+# already pins 4.0.32 against the same Apache archive URL; passing the
+# `urls` list explicitly here proves the override layer works without
+# requiring an actual mirror to be reachable for the test. In a real
+# corporate setup this would be a Nexus / Artifactory mirror URL list.
+# Unspecified fields (`integrity`, `strip_prefix`, `lib_jar`) fall back
+# to the registry entry for 4.0.32.
+groovy.toolchain(
+    version = "4.0.32",
+    urls = ["https://archive.apache.org/dist/groovy/4.0.32/distribution/apache-groovy-binary-4.0.32.zip"],
+)
+
+use_repo(groovy, "groovy_toolchains")
+register_toolchains("@groovy_toolchains//:all")

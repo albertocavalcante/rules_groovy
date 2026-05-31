@@ -1,0 +1,12 @@
+load("@rules_groovy//groovy:defs.bzl", "groovy_library")
+
+# Proves that an explicit `groovy.toolchain(urls = ...)` override resolves
+# end-to-end: the SDK is fetched from the user-supplied URL list, the
+# unspecified fields (integrity / strip_prefix / lib_jar) backfill from
+# the registry, and `groovy_library` compiles against the resulting
+# toolchain like any other example.
+groovy_library(
+    name = "greeter",
+    srcs = ["src/main/groovy/greeter/Greeter.groovy"],
+    visibility = ["//visibility:public"],
+)

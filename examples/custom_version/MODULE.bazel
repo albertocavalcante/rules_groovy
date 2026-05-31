@@ -1,0 +1,28 @@
+module(name = "rules_groovy_example_custom_version", version = "0.0.0")
+
+bazel_dep(name = "rules_groovy", version = "0.0.0")
+local_path_override(
+    module_name = "rules_groovy",
+    path = "../..",
+)
+
+groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
+
+# Pin a Groovy version that is NOT in `groovy/private/versions.bzl`.
+# When the extension does not recognize `version`, all four download
+# fields (`urls`, `integrity`, `strip_prefix`, `lib_jar`) become
+# mandatory; missing any of them is a hard error with a recoverable
+# message. Integrity computed from the Apache release zip:
+#
+#   curl -sL https://archive.apache.org/.../apache-groovy-binary-4.0.24.zip \
+#     | sha256sum
+groovy.toolchain(
+    version = "4.0.24",
+    urls = ["https://archive.apache.org/dist/groovy/4.0.24/distribution/apache-groovy-binary-4.0.24.zip"],
+    integrity = "sha256-2/82g1VovsInGHb3C/zKbeuA4bF5RTzKk0pQLqMBu4A=",
+    strip_prefix = "groovy-4.0.24",
+    lib_jar = "lib/groovy-4.0.24.jar",
+)
+
+use_repo(groovy, "groovy_toolchains")
+register_toolchains("@groovy_toolchains//:all")

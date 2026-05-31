@@ -6,6 +6,20 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- Two downstream-consumer demos that close the acceptance gap on
+  ISSUE-044 (`groovy.toolchain` override surface):
+    * `examples/override_url/` — registry-known version with a
+      caller-supplied `urls` list, demonstrating the corporate-mirror
+      pattern. `integrity`, `strip_prefix`, `lib_jar` backfill from the
+      registry.
+    * `examples/custom_version/` — Groovy 4.0.24 (not in the registry)
+      with all four download fields supplied. Validates the unknown-
+      version error path operationally; the README captures the exact
+      failure message you get when any of the four fields is missing.
+  Both wired into the `examples / *` CI matrix.
+
 ### Removed
 
 - `groovy/groovy.bzl` and `groovy/toolchain.bzl`, the deprecated
