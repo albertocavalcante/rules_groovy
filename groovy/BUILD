@@ -37,22 +37,6 @@ bzl_library(
     ],
 )
 
-# Back-compat shim: re-exports the public macros / rules / providers from
-# `defs.bzl`. Listed here so existing `load("//groovy:groovy.bzl", ...)` /
-# `load("//groovy:toolchain.bzl", ...)` callers keep resolving for one
-# release.
-bzl_library(
-    name = "groovy_bzl",
-    srcs = ["groovy.bzl"],
-    deps = [":defs_bzl"],
-)
-
-bzl_library(
-    name = "toolchain_bzl",
-    srcs = ["toolchain.bzl"],
-    deps = [":defs_bzl"],
-)
-
 # Stub `bzl_library` wrapping the rules_java public + transitive
 # private modules our .bzl files reach via @rules_java//java:defs.bzl.
 # Stardoc's doc-extract requires a bzl_library for every transitively

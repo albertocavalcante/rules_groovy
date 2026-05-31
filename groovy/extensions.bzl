@@ -42,8 +42,8 @@ The extension emits:
     implicit default; `<tag.name>_sdk` for explicit tags so multi-version
     builds get predictable names);
   * one `http_jar` per pinned-default test artifact (legacy compat names
-    `junit_artifact` / `spock_artifact` kept so the un-touched
-    `groovy/groovy.bzl` macros still resolve them);
+    `junit_artifact` / `spock_artifact` kept until ISSUE-061 rewires
+    test rules off literal-label references);
   * a `@groovy_artifacts` hub repo aliasing all test deps by logical name;
   * a `@groovy_toolchains` hub repo with `groovy_toolchain` +
     `groovy_deps` + `toolchain(...)` per SDK and a `:all` filegroup.
@@ -240,8 +240,8 @@ def _resolve_toolchain(tag):
 
     # Repo-name policy: the implicit-default tag (synthesized when no
     # `groovy.toolchain` was declared) keeps the legacy
-    # `groovy_sdk_artifact` name for back-compat with `groovy/groovy.bzl`
-    # macros that still hardcode that label. Explicit user tags get
+    # `groovy_sdk_artifact` repo name until ISSUE-061 rewires the
+    # remaining literal-label consumers off it. Explicit user tags get
     # `<tag.name>_sdk` for predictability in multi-version builds.
     repo_name = "groovy_sdk_artifact" if tag.name == _DEFAULT_TAG_MARKER else tag.name + "_sdk"
 
@@ -415,9 +415,9 @@ def _emit_artifact_http_jars(testing):
     """Instantiate per-artifact http_jar repos for the pinned-default test deps.
 
     Repo names follow the legacy compat shape (`junit_artifact`,
-    `spock_artifact`) for JUnit 4 + Spock so the un-touched
-    `groovy/groovy.bzl` macros keep resolving the labels. Other artifacts
-    use `groovy_artifact_<logical>` names because no legacy consumer
+    `spock_artifact`) for JUnit 4 + Spock until ISSUE-061 rewires the
+    remaining literal-label consumers. Other artifacts use
+    `groovy_artifact_<logical>` names because no legacy consumer
     references them by literal label.
 
     For `junit = "5"` we fetch the full Jupiter + Platform classpath

@@ -30,7 +30,10 @@ Hermeticity checkpoints:
     matching `java_library` parity for `ClassLoader.getResource("pkg/")`).
   * Mnemonics on every action (`Groovyc`, `GroovySingleJar`).
 
-The functions exposed here are consumed by `groovy/groovy.bzl`'s public rules.
+The functions exposed here are consumed by the public rules in
+`groovy/private/library.bzl`, `binary.bzl`, `test.bzl`, and
+`runtime.bzl`, which `groovy/defs.bzl` re-exports as the canonical
+load surface.
 """
 
 load("@rules_java//java:defs.bzl", "JavaInfo")

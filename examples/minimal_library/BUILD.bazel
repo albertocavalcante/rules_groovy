@@ -1,8 +1,9 @@
 load("@rules_groovy//groovy:defs.bzl", "groovy_library")
 
 # Smallest possible downstream usage: one Groovy source, no deps beyond
-# the toolchain-resolved Groovy runtime. Proves the public load path
-# `@rules_groovy//groovy:groovy.bzl` resolves from a fresh module.
+# the toolchain-resolved Groovy runtime. Proves the canonical public
+# load path `@rules_groovy//groovy:defs.bzl` resolves from a fresh
+# module.
 groovy_library(
     name = "greeter",
     srcs = ["src/main/groovy/greeter/Greeter.groovy"],
