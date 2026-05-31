@@ -35,6 +35,25 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ### CI
 
+- Bazel remote cache wired into CI (ISSUE-080). Every workflow
+  `bazel build`/`bazel test` now goes through a composite GH
+  action at `.github/actions/bazel-cmd/` that selects read-write
+  for same-repo PRs / `push:main` / cron / `workflow_dispatch`,
+  read-only for fork PRs, and disk-only fallback when either of
+  the `BAZEL_CACHE_URL` / `BAZEL_CACHE_TOKEN` secrets is unset.
+  The cache URL and bearer token live only in repository secrets
+  and the composite masks the URL from log output so Bazel error
+  surfaces do not echo it. `.bazelrc` carries no cache flags;
+  local use is documented by example in the rc comment block.
+
+- PR triggers gain `paths-ignore: ['**/*.md']` and a per-job
+  `if: !github.event.pull_request.draft` (ISSUE-080). Pure-prose
+  PRs do not start the workflow; draft PRs run no jobs until they
+  flip to ready-for-review (covered by the `ready_for_review` event
+  type added to `on.pull_request.types`). Mixed code + docs PRs
+  (the copyright-bump pattern from #30) still trigger normally
+  because they touch non-`.md` files.
+
 - Bazel 9 prebuilt `protoc` enabled (ISSUE-079). Adds
   `--@protobuf//bazel/toolchains:prefer_prebuilt_protoc=true` to the
   unconditional `build` section of `.bazelrc`. Available under
@@ -69,9 +88,9 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
   Every workflow `bazel build` / `bazel test` switches from inline
   flags (`--config=bzlmod --lockfile_mode=error --disk_cache=...`)
   to `--config=ci --config=disk-cache`. The `:bzlmod` no-op alias
-  is retained for legacy callers. The remote-cache configs
-  (`--config=remote-cache` and `--config=remote-cache-write`) land
-  separately in ISSUE-080.
+  is retained for legacy callers. Remote-cache wiring lands
+  separately in ISSUE-080 via the CI composite action; nothing
+  about the cache is committed to `.bazelrc`.
 
 - Workflow trimmed for budget reality (ISSUE-078). May 2026 metered
   usage showed `rules_groovy` consumed $37.62 gross of GitHub Actions
