@@ -69,6 +69,10 @@ def path_to_class(path, src_roots = _DEFAULT_SRC_ROOTS):
       path: Workspace-relative path to a test source file.
       src_roots: Source-root prefixes to try, longest first. Defaults to
         `["src/test/groovy", "src/test/java"]`.
+
+    Returns:
+      The fully-qualified Java/Groovy class name as a string (e.g.
+      `"com.example.MyTest"`).
     """
     sorted_roots = sorted(src_roots, key = lambda r: -len(r))
     for root in sorted_roots:

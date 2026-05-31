@@ -119,7 +119,11 @@ longest_prefix_wins_test = unittest.make(_longest_prefix_wins_test_impl)
 # that the documented error message surfaces.
 # ---------------------------------------------------------------------------
 
-def _no_match_rule_impl(ctx):
+def _no_match_rule_impl(ctx):  # buildifier: disable=unused-variable
+    # `ctx` is required by Bazel's `rule(implementation=...)` signature
+    # even though this impl body doesn't read it — analysis only needs to
+    # invoke `path_to_class` and observe the `fail()`.
+    #
     # Forces `path_to_class` to fail: `wrong/T.groovy` does not start
     # with any of the default roots.
     path_to_class("wrong/T.groovy", _DEFAULT_ROOTS)

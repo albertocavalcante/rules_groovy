@@ -119,13 +119,21 @@ def _toolchain_dep_provider_jars(ctx):
 def toolchain_deps_by_name(ctx, names):
     """Pick `GroovyDepsInfo` bundles off the toolchain by logical name.
 
-    Returns a list of `JavaInfo` in the same order as `names`. Fails with
-    a clear message if any requested name is not wired on the resolved
-    toolchain (e.g. asking for `"junit_api"` on a JUnit-4 toolchain).
+    Fails with a clear message if any requested name is not wired on the
+    resolved toolchain (e.g. asking for `"junit_api"` on a JUnit-4
+    toolchain).
 
     Useful for rules that need a specific subset of the toolchain's test
     framework deps (vs. consuming the whole set via
     `_toolchain_dep_provider_jars`).
+
+    Args:
+      ctx:   the rule context (must resolve `GROOVY_TOOLCHAIN_TYPE`).
+      names: list[str] of `dep_name` keys from the toolchain's
+        `dep_providers`.
+
+    Returns:
+      A list of `JavaInfo` providers in the same order as `names`.
     """
     deps_info_list = ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].deps
     by_name = {info.name: info.java_info for info in deps_info_list}
@@ -250,6 +258,15 @@ def test_runtime_classpath(ctx, deps):
         platform-engine, platform-commons, opentest4j, apiguardian-api)
         land on the test classpath without every macro re-listing them.
       * Caller-supplied deps' transitive runtime jars (JavaInfo) or raw .jars.
+
+    Args:
+      ctx:  the rule context (must resolve `GROOVY_TOOLCHAIN_TYPE`).
+      deps: list[Target] of caller-supplied test deps (JavaInfo-providing
+        preferred; raw `.jar` files also accepted).
+
+    Returns:
+      A `depset` of `File` carrying the full runtime classpath for the
+      test launcher.
     """
     groovy_info = _groovy_info(ctx)
 
@@ -324,6 +341,7 @@ def write_test_launcher(ctx, classpath, classes, jvm_flags, runner_class):
                     and Spock 2.x (`--select-class <FQCN>` args).
     """
     java_runtime = _java_runtime(ctx)
+
     # The JDK runtime's java_executable_runfiles_path is the
     # runfiles-relative path to the JVM launcher; falls back to java_home
     # when running outside the runfiles tree. We use the explicit path so

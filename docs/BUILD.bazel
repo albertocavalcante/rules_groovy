@@ -49,8 +49,8 @@ stardoc(
 filegroup(
     name = "all_docs",
     srcs = [
+        ":rules-extension.md",
         ":rules-public.md",
         ":rules-toolchain.md",
-        ":rules-extension.md",
     ],
 )
