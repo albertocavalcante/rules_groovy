@@ -3,12 +3,11 @@
 #
 # Layout: unconditional defaults at the top, then `--config=NAME`
 # sections below. Local devs run plain `bazel build //...`; CI uses
-# `--config=ci --config=disk-cache` (and, once ISSUE-080 lands,
-# optionally `--config=remote-cache` or `--config=remote-cache-write`).
+# `--config=ci --config=disk-cache`. The remote-cache wiring lives
+# entirely in the CI composite action and the bottom-of-file comment
+# block; nothing about the cache URL or token is committed here.
 #
-# See:
-#   rules_groovy-plan/decisions/ADR-005-bazel-9-baseline.md
-#   rules_groovy-plan/notes/prebuilt-protoc-and-remote-cache-2026-05-31.md
+# See: rules_groovy-plan/decisions/ADR-005-bazel-9-baseline.md
 # ============================================================
 
 # ------------------------------------------------------------
@@ -57,3 +56,17 @@ test:ci  --test_output=errors
 # /Users/<user>/.cache/bazel-disk on macOS.
 # ------------------------------------------------------------
 build:disk-cache --disk_cache=~/.cache/bazel-disk
+
+# ------------------------------------------------------------
+# Remote cache (optional). The cache URL and bearer token are
+# supplied at the command line; nothing about them lives in this
+# file. CI wires it through the composite at
+# .github/actions/bazel-cmd from repository secrets.
+#
+# Local use:
+#   bazel build \
+#     --remote_cache="$URL" \
+#     --remote_header="authorization=Bearer $TOKEN" \
+#     --remote_upload_local_results=false \
+#     --remote_timeout=30 --remote_retries=1 //...
+# ------------------------------------------------------------

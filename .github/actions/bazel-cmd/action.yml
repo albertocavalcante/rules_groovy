@@ -1,0 +1,87 @@
+name: 'Bazel with optional remote cache'
+description: |
+  Run `bazel build` or `bazel test` with the remote cache wired in
+  when both a URL and a bearer token are present. Same-repo PR /
+  push:main / cron / dispatch get read-write; fork PR gets read-only;
+  missing inputs fall through to disk cache only.
+
+  Caller is responsible for checkout, setup-bazelisk, and the
+  actions/cache@v4 disk-cache step.
+
+inputs:
+  command:
+    description: 'bazel subcommand: build or test'
+    required: true
+  targets:
+    description: 'target patterns, e.g. //...'
+    required: true
+  configs:
+    description: '--config flags prepended to the bazel invocation'
+    required: false
+    default: '--config=ci --config=disk-cache'
+  extra-flags:
+    description: 'extra flags inserted between cache args and targets'
+    required: false
+    default: ''
+  remote-cache-url:
+    description: 'remote cache URL; empty disables remote cache'
+    required: false
+    default: ''
+  remote-cache-token:
+    description: 'bearer token; empty disables remote cache'
+    required: false
+    default: ''
+  working-directory:
+    description: 'working directory for the bazel call'
+    required: false
+    default: '.'
+  bazel-version:
+    description: 'USE_BAZEL_VERSION for the bazelisk shim'
+    required: false
+    default: '9.x'
+
+runs:
+  using: composite
+  steps:
+    - name: Bazel
+      shell: bash
+      env:
+        USE_BAZEL_VERSION: ${{ inputs.bazel-version }}
+        BAZEL_CACHE_URL:   ${{ inputs.remote-cache-url }}
+        BAZEL_CACHE_TOKEN: ${{ inputs.remote-cache-token }}
+      run: |
+        set -euo pipefail
+        cd "${{ inputs.working-directory }}"
+
+        # shellcheck disable=SC2206
+        configs=(${{ inputs.configs }})
+        # shellcheck disable=SC2206
+        extra=(${{ inputs.extra-flags }})
+        cache=()
+        mode="disk-only"
+
+        if [[ -n "${BAZEL_CACHE_URL:-}" && -n "${BAZEL_CACHE_TOKEN:-}" ]]; then
+          # Mask the URL so it is redacted from any log line Bazel
+          # might emit on errors. ::add-mask:: applies for the rest
+          # of the job.
+          echo "::add-mask::${BAZEL_CACHE_URL}"
+
+          is_fork=false
+          if [[ "${{ github.event_name }}" == "pull_request" ]] && \
+             [[ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]]; then
+            is_fork=true
+          fi
+
+          cache+=(--remote_cache="${BAZEL_CACHE_URL}"
+                  --remote_timeout=30 --remote_retries=1)
+          if $is_fork; then
+            cache+=(--remote_upload_local_results=false); mode="remote read-only (fork)"
+          else
+            cache+=(--remote_upload_local_results=true);  mode="remote read-write"
+          fi
+          cache+=(--remote_header="authorization=Bearer ${BAZEL_CACHE_TOKEN}")
+        fi
+
+        echo "::group::Bazel cache: ${mode}"
+        bazel ${{ inputs.command }} "${configs[@]}" "${cache[@]}" "${extra[@]}" ${{ inputs.targets }}
+        echo "::endgroup::"

@@ -73,6 +73,10 @@ bazel test  --config=ci --config=disk-cache //...
 
 Plain `bazel build //...` also works for quick local checks; you'll lose the strict lockfile gate and the disk-cache routing, but the prebuilt-protoc flag (set unconditionally at the top of `.bazelrc`) and the `remotejdk_11` Java runtime still apply.
 
+### Remote cache (optional)
+
+If you have a cache URL and bearer token, the rc comment block at the bottom of `.bazelrc` shows the flag set to pass at the command line. Read-write requires the token; read-only flips `--remote_upload_local_results=false`.
+
 To match the buildifier CI gate, auto-format `.bzl` / `BUILD` / `MODULE.bazel` / `REPO.bazel` files before pushing:
 
 ```
