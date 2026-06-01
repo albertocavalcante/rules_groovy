@@ -1,0 +1,12 @@
+load("@rules_groovy//groovy:defs.bzl", "groovy_library")
+
+# Proves that `groovy.local_toolchain` resolves an on-disk Groovy SDK
+# end-to-end: the repository rule symlinks `sdk_path` into the
+# generated `groovy-4.0.32/` layout, the toolchain emits a hub
+# `groovy_toolchain` against it, and `groovy_library` compiles
+# against the resulting toolchain like any other example.
+groovy_library(
+    name = "greeter",
+    srcs = ["src/main/groovy/greeter/Greeter.groovy"],
+    visibility = ["//visibility:public"],
+)
