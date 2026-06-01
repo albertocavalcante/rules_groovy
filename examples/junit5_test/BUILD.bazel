@@ -5,12 +5,16 @@ groovy_library(
     srcs = ["src/main/groovy/calc/Calc.groovy"],
 )
 
-# `groovy_junit5_test` compiles against `@groovy_artifacts//:junit_api`
-# (the Jupiter API alias the extension exposes when the testing flavor
-# resolved to JUnit 5) and runs through
+# JUnit 5 deps come from rules_jvm_external's `maven.install` in
+# MODULE.bazel. `groovy_junit5_test` pins the runner to
 # `org.junit.platform.console.ConsoleLauncher`.
 groovy_junit5_test(
     name = "CalcTest",
     tests = ["src/test/groovy/calc/CalcTest.groovy"],
-    deps = [":calc"],
+    deps = [
+        ":calc",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+        "@maven//:org_junit_jupiter_junit_jupiter_engine",
+        "@maven//:org_junit_platform_junit_platform_console",
+    ],
 )

@@ -40,23 +40,18 @@ bazel_dep(name = "bazel_skylib", version = "1.8.2")
 # `dev_dependency = True` keeps Stardoc out of downstream module graphs.
 bazel_dep(name = "stardoc", version = "0.8.1", dev_dependency = True)
 
-# Chapter 5 of the v0.1.0 release narrative: the module extension owns
-# the user-facing API. Three tag classes (`groovy.toolchain`,
-# `groovy.local_toolchain`, `groovy.testing`) plus implicit defaults
-# make the minimal MODULE.bazel three lines. The extension emits the
-# `@groovy_toolchains` hub repo containing one groovy_toolchain +
-# toolchain(...) per registered SDK and a `:all` filegroup so
-# register_toolchains stays a one-liner regardless of how many SDKs
-# the build pins.
+# The module extension owns the user-facing API. Two tag classes
+# (`groovy.toolchain`, `groovy.local_toolchain`) plus an implicit
+# default make the minimal MODULE.bazel three lines. The extension
+# emits the `@groovy_toolchains` hub repo containing one
+# groovy_toolchain + toolchain(...) per registered SDK.
 groovy = use_extension("//groovy:extensions.bzl", "groovy")
 
 # `groovy_toolchains` is the single user-facing repo: it holds the
 # `groovy_toolchain` instances that `register_toolchains(...)` below
-# resolves. Every other repo the extension fetches (SDK jars, JUnit,
-# Spock, Hamcrest) stays internal to the hub — rule implementations
-# read jars off the toolchain's `dep_providers`, not by literal
-# `@junit_artifact` / `@spock_artifact` / `@groovy_sdk_artifact`
-# labels.
+# resolves. SDK jars stay internal to the hub. Test framework jars
+# (JUnit, Spock, etc.) are user concerns — pass them via `deps` on
+# the test rules, typically resolved by rules_jvm_external.
 use_repo(groovy, "groovy_toolchains")
 
 register_toolchains("@groovy_toolchains//:all")

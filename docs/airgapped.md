@@ -18,36 +18,27 @@ limitations under the License.
 
 This document covers how to consume `rules_groovy` when the build machine
 has restricted egress, only an internal Maven mirror, or no network at
-all. The downstream question this answers: "I have an internal Maven
-mirror plus an internal HTTP cache. Can I use `rules_groovy` unmodified?"
+all.
 
-The short answer is **yes** for the SDK and for the JUnit / Spock jars,
-with some sharp edges around (a) Spock's transitive ASM and Groovy-JSON
-deps, (b) the `maven_repo` attribute being a single string rather than a
-list, and (c) several JUnit-5 platform jars that are fetched but not
-individually overridable via the `*_label` route. The details below
-enumerate every external download and give three concrete recipes.
+The short answer is **yes**: the Groovy SDK URL is overridable per the
+recipes below, and test framework jars (JUnit, Spock, etc.) are routed
+through your existing `rules_jvm_external` `maven.install` — they are
+not part of `rules_groovy`'s download graph.
 
 ## 1. Inventory of every external download
 
 | # | What | Where the URL is set | Override knobs | Integrity? |
 |---|------|----------------------|----------------|------------|
 | 1 | Apache Groovy SDK zip (default 4.0.32, also 3.0.25, 2.5.23) | `versions.bzl` `GROOVY_VERSIONS[*].url_template` → `groovy_sdk_repository.urls` | `groovy.toolchain(urls = [...], integrity = "...", strip_prefix = "...", lib_jar = "...")` or `groovy.local_toolchain(sdk_path = ...)` | Yes (`sha256-…` for all three pinned versions). Override `urls` without `integrity` silently degrades reproducibility. |
-| 2 | `junit:junit:4.13.2` | `http_jar(name = "junit_artifact", ...)` (JUnit 4 path) | `groovy.testing(maven_repo = "...", junit_label = "@maven//:junit_junit")` | Yes. |
-| 3 | `org.hamcrest:hamcrest-core:1.3` | `http_jar(name = "groovy_artifact_hamcrest", ...)` | `maven_repo` URL or `hamcrest_label`. | Yes. |
-| 4 | `org.junit.platform:junit-platform-console:1.14.4` (JUnit 5 path) | `http_jar(name = "junit_artifact", ...)` | `maven_repo` URL or `junit_label`. | Yes. |
-| 5 | `org.junit.jupiter:junit-jupiter-api:5.14.4` | `http_jar(name = "groovy_artifact_junit_api", ...)` | `maven_repo` URL or `junit_api_label`. | Yes. |
-| 6 | `org.junit.jupiter:junit-jupiter-engine:5.14.4` | `http_jar(name = "groovy_artifact_junit_engine", ...)` | `maven_repo` URL or `junit_engine_label`. | Yes. |
-| 7 | `org.junit.platform:junit-platform-launcher:1.14.4` | `http_jar` | `maven_repo` URL only. No `*_label` override yet. | Yes. |
-| 8 | `org.junit.platform:junit-platform-engine:1.14.4` | `http_jar` | `maven_repo` URL only. No `*_label` override yet. | Yes. |
-| 9 | `org.junit.platform:junit-platform-commons:1.14.4` | `http_jar` | `maven_repo` URL only. No `*_label` override yet. | Yes. |
-| 10 | `org.opentest4j:opentest4j:1.3.0` | `http_jar` | `maven_repo` URL only. No `*_label` override yet. | Yes. |
-| 11 | `org.apiguardian:apiguardian-api:1.1.2` | `http_jar` | `maven_repo` URL only. No `*_label` override yet. | Yes. |
-| 12 | `org.spockframework:spock-core:<1.3-groovy-2.5 \| 2.3-groovy-3.0 \| 2.3-groovy-4.0>` | `http_jar(name = "spock_artifact", ...)` | `maven_repo` URL, `spock_label`, or `groovy.testing(spock = False)`. | Yes (per Groovy major.minor). |
 
 That is the full enumeration. No other `http_archive`, `http_file`, or
 `rctx.download*` call exists in `groovy/`. The `groovyc_wrapper.sh`
 performs zero network at action time.
+
+Test framework jars (JUnit, Spock, Jupiter, Platform, etc.) come in via
+`rules_jvm_external`'s `maven.install` in the consumer's `MODULE.bazel`.
+Air-gapping those is `rules_jvm_external`'s domain — set
+`repositories = ["https://nexus.corp/..."]` and commit a lockfile.
 
 Out-of-scope-but-related downloads:
 
@@ -61,72 +52,22 @@ Out-of-scope-but-related downloads:
 
 ## 2. Known gaps
 
-### Gap A — URL fields are single-element lists
+### Gap A — SDK `urls` field is a single-element list
 
 The registry default produces a one-element list for the Groovy SDK
 download. Bazel's `download_and_extract` accepts a URL list and tries
 each in order, but no built-in fallback mirror ships with the rules. A
 consumer whose proxy blocks `archive.apache.org` will fail to download
-even though Bazel supports multi-URL fallback natively.
+even though Bazel supports multi-URL fallback natively. Override `urls`
+to add corp-mirror entries.
 
-The same applies to JUnit and Spock jars: `_emit_artifact_http_jars`
-calls `http_jar(url = _maven_url(testing.maven_repo, coord))` with a
-single URL string rather than a list. `groovy.testing` has no plural
-`urls` attribute.
-
-### Gap B — five JUnit-5 platform jars have no `*_label` override
-
-`groovy.testing` exposes `junit_label`, `junit_api_label`,
-`junit_engine_label`, `hamcrest_label`, and `spock_label`. The full
-JUnit-5 transitive set fetched by the extension is:
-
-- `junit-platform-console` — overridable via `junit_label`
-- `junit-jupiter-api` — overridable via `junit_api_label`
-- `junit-jupiter-engine` — overridable via `junit_engine_label`
-- `junit-platform-launcher` — no override
-- `junit-platform-engine` — no override
-- `junit-platform-commons` — no override
-- `opentest4j` — no override
-- `apiguardian-api` — no override
-
-A user routing everything through `rules_jvm_external` can override
-five jars but is forced to let `rules_groovy` fetch the remaining five
-JUnit-platform jars from `maven_repo` via `http_jar`. Combined with
-Gap A, even on an air-gapped setup with `rules_jvm_external` doing
-proper Maven resolution against the internal mirror, `rules_groovy`
-still makes five extra direct HTTP fetches against `maven_repo`.
-
-### Gap C — `maven_repo` is a single string, not a list
-
-A site with multiple mirrors (e.g. internal Artifactory plus Sonatype
-OSS mirror plus Maven Central as last resort) cannot express that
-fallback chain. `http_jar` natively supports `urls = [...]`.
-
-### Gap D — repo override without integrity silently degrades reproducibility
+### Gap B — SDK override without integrity silently degrades reproducibility
 
 A user who passes `urls = ["file:///srv/mirror/..."]` without setting
 `integrity` ends up with a working but non-reproducible build. The
 extension uses the registry `integrity` value as fallback when the
 overridden URL still points at a known version. The footgun is the
 explicit-override case where the user *also* clears `integrity`.
-
-### Gap E — Spock's optional transitive deps are not modeled
-
-`SPOCK_FOR_GROOVY` only pins `spock-core`. Spock 2.x at runtime also
-needs:
-
-- `org.apache.groovy:groovy-json` and `org.apache.groovy:groovy-xml`
-  (Spock 2.x) — bundled inside the Apache Groovy distribution under
-  `lib/`. The SDK `:sdk` filegroup picks them up, so this works in
-  practice with no extra wiring.
-- `net.bytebuddy:byte-buddy` — optional, only needed for `@Stub` /
-  `@Spy`. Not fetched by `rules_groovy`. If a spec uses `@Spy`, you
-  get a `ClassNotFoundException` at runtime and must wire byte-buddy
-  via `rules_jvm_external` plus `groovy.testing(spock_label = ...)`.
-- `org.objenesis:objenesis` — same situation.
-
-A user who pre-populates a Maven mirror needs to know exactly which
-coords to mirror if Spock's mocking features are in use.
 
 ## 3. Recipes
 
@@ -148,6 +89,7 @@ Internal Artifactory mirrors Maven Central at
 ```python
 # MODULE.bazel
 bazel_dep(name = "rules_groovy", version = "0.1.0")
+bazel_dep(name = "rules_jvm_external", version = "7.0")
 
 groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
 
@@ -159,100 +101,58 @@ groovy.toolchain(
         "https://artifactory.corp/apache-archive/groovy/{version}/distribution/apache-groovy-binary-{version}.zip",
     ],
 )
-
-# Redirect JUnit + Spock + every transitive JUnit-5 platform jar
-# through the corp Maven mirror.
-groovy.testing(
-    junit = "5",
-    spock = True,
-    maven_repo = "https://artifactory.corp/maven-central",
-)
-
 use_repo(groovy, "groovy_toolchains")
 register_toolchains("@groovy_toolchains//:all")
+
+# Test framework jars via the corp Maven mirror.
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    artifacts = [
+        "org.junit.jupiter:junit-jupiter-api:5.11.0",
+        "org.junit.jupiter:junit-jupiter-engine:5.11.0",
+        "org.junit.platform:junit-platform-console:1.11.0",
+    ],
+    lock_file = "//:maven_install.json",
+    repositories = ["https://artifactory.corp/maven-central"],
+)
+use_repo(maven, "maven")
 ```
 
-Verify reproducibility with:
+Verify reproducibility with `bazel build --lockfile_mode=error //...`.
 
-```sh
-bazel build --lockfile_mode=error //...
-```
+### Scenario 3 — full air-gap, pre-staged distdir + lockfile
 
-Caveat from Gap A: there is no automatic fallback to `repo1.maven.org`
-if the corp mirror is briefly unavailable, because `maven_repo` is a
-single string. If you want multi-URL fallback you must skip `maven_repo`
-entirely and override every jar by label (Scenario 3 below).
-
-### Scenario 3 — full air-gap, `rules_jvm_external` against internal Nexus
-
-The strongest air-gap posture: route every JVM artifact through
-`rules_jvm_external` (which honors `repository_cache`, integrity, and
-mirrors, and is the standard Bazel-JVM offline tool), and use a
-pre-staged `--distdir` directory for the Groovy SDK zip.
+The strongest air-gap posture: pre-stage the Groovy SDK zip under
+`--distdir`, and let `rules_jvm_external`'s lockfile cover the test
+deps. No build-time network access of any kind.
 
 ```python
 # MODULE.bazel
 bazel_dep(name = "rules_groovy", version = "0.1.0")
-bazel_dep(name = "rules_jvm_external", version = "6.5")
-
-maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
-maven.install(
-    name = "maven",
-    artifacts = [
-        "junit:junit:4.13.2",
-        "org.hamcrest:hamcrest-core:1.3",
-        # JUnit 5 set:
-        "org.junit.jupiter:junit-jupiter-api:5.14.4",
-        "org.junit.jupiter:junit-jupiter-engine:5.14.4",
-        "org.junit.platform:junit-platform-console:1.14.4",
-        "org.junit.platform:junit-platform-launcher:1.14.4",
-        "org.junit.platform:junit-platform-engine:1.14.4",
-        "org.junit.platform:junit-platform-commons:1.14.4",
-        "org.opentest4j:opentest4j:1.3.0",
-        "org.apiguardian:apiguardian-api:1.1.2",
-        # Spock:
-        "org.spockframework:spock-core:2.3-groovy-4.0",
-    ],
-    repositories = [
-        "https://nexus.corp/repository/maven-public",
-    ],
-    fetch_sources = False,
-)
-use_repo(maven, "maven")
+bazel_dep(name = "rules_jvm_external", version = "7.0")
 
 groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
 
-# Either point at a pre-staged file:// URL ...
+# Point at a pre-staged file:// URL (--distdir resolves the SHA-keyed
+# file content-wise; filename is irrelevant).
 groovy.toolchain(
     version = "4.0.32",
     urls = ["file:///srv/bazel-distfiles/apache-groovy-binary-4.0.32.zip"],
-    # Integrity falls back to the registry value.
 )
-# ... or use the local_toolchain to skip download entirely:
-# groovy.local_toolchain(
-#     name = "groovy",
-#     sdk_path = "/opt/groovy/4.0.32",
-#     version = "4.0.32",
-#     lib_jar = "lib/groovy-4.0.32.jar",
-# )
-
-groovy.testing(
-    junit = "5",
-    spock = True,
-    # Gap B: only junit_label, junit_api_label, junit_engine_label,
-    # hamcrest_label, spock_label are exposed. The other five platform
-    # jars (launcher, engine, commons, opentest4j, apiguardian) are
-    # fetched via http_jar regardless. To suppress those fetches the
-    # user must ALSO set maven_repo to the internal Nexus:
-    maven_repo = "https://nexus.corp/repository/maven-public",
-    junit_label        = "@maven//:org_junit_platform_junit_platform_console",
-    junit_api_label    = "@maven//:org_junit_jupiter_junit_jupiter_api",
-    junit_engine_label = "@maven//:org_junit_jupiter_junit_jupiter_engine",
-    spock_label        = "@maven//:org_spockframework_spock_core",
-)
-
 use_repo(groovy, "groovy_toolchains")
 register_toolchains("@groovy_toolchains//:all")
+
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    artifacts = [
+        "org.junit.jupiter:junit-jupiter-api:5.11.0",
+        "org.junit.jupiter:junit-jupiter-engine:5.11.0",
+        "org.junit.platform:junit-platform-console:1.11.0",
+    ],
+    lock_file = "//:maven_install.json",
+    repositories = ["https://nexus.corp/repository/maven-public"],
+)
+use_repo(maven, "maven")
 ```
 
 Build invocation:
@@ -276,8 +176,8 @@ over.
 
 ### Scenario 4 — BYO SDK, vendored on host or NFS
 
-Zero downloads of any kind for the SDK; combine with Scenario 3's
-`rules_jvm_external` for test deps.
+Zero downloads of any kind for the SDK; combine with `rules_jvm_external`
+for test deps.
 
 ```python
 groovy.local_toolchain(

@@ -6,35 +6,13 @@ Single load surface for every user-facing symbol in this ruleset:
 
   * Macros: `groovy_library`, `groovy_and_java_library`, `groovy_binary`,
     `groovy_test`, `groovy_junit_test`, `groovy_junit5_test`, `spock_test`.
-  * Rules: `groovy_runtime`, `groovy_toolchain`, `groovy_deps`.
-  * Providers: `GroovyToolchainInfo`, `GroovyDepsInfo`, `GroovyLibraryInfo`.
+  * Rules: `groovy_runtime`, `groovy_toolchain`.
+  * Providers: `GroovyToolchainInfo`, `GroovyLibraryInfo`.
   * Helpers: `path_to_class`.
 
 Every symbol is re-exported from a single-responsibility `.bzl` under
 `groovy/private/`. Downstream BUILD files should `load("@rules_groovy//groovy:defs.bzl", ...)`
 for everything.
-
-<a id="groovy_deps"></a>
-
-## groovy_deps
-
-<pre>
-load("@rules_groovy//groovy:defs.bzl", "groovy_deps")
-
-groovy_deps(<a href="#groovy_deps-name">name</a>, <a href="#groovy_deps-dep">dep</a>, <a href="#groovy_deps-dep_name">dep_name</a>)
-</pre>
-
-Wraps a JavaInfo target into a GroovyDepsInfo with a logical name (dep_providers indirection).
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="groovy_deps-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="groovy_deps-dep"></a>dep |  JavaInfo-providing target whose classpath backs this logical dep.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="groovy_deps-dep_name"></a>dep_name |  Logical name the toolchain looks up at use time (e.g. 'junit_runner', 'spock').   | String | required |  |
-
 
 <a id="groovy_library"></a>
 
@@ -91,10 +69,10 @@ Exposes the active Groovy toolchain's resolved runtime jar as a `JavaInfo`-provi
 <pre>
 load("@rules_groovy//groovy:defs.bzl", "groovy_toolchain")
 
-groovy_toolchain(<a href="#groovy_toolchain-name">name</a>, <a href="#groovy_toolchain-dep_providers">dep_providers</a>, <a href="#groovy_toolchain-groovyc">groovyc</a>, <a href="#groovy_toolchain-runner_class">runner_class</a>, <a href="#groovy_toolchain-runtime_jar">runtime_jar</a>, <a href="#groovy_toolchain-sdk">sdk</a>, <a href="#groovy_toolchain-version">version</a>)
+groovy_toolchain(<a href="#groovy_toolchain-name">name</a>, <a href="#groovy_toolchain-groovyc">groovyc</a>, <a href="#groovy_toolchain-runtime_jar">runtime_jar</a>, <a href="#groovy_toolchain-sdk">sdk</a>, <a href="#groovy_toolchain-version">version</a>)
 </pre>
 
-Defines a Groovy toolchain: compiler, SDK file set, runtime jar, and named dep bundles.
+Defines a Groovy toolchain: compiler, SDK file set, runtime jar, and version string.
 
 **ATTRIBUTES**
 
@@ -102,32 +80,10 @@ Defines a Groovy toolchain: compiler, SDK file set, runtime jar, and named dep b
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="groovy_toolchain-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="groovy_toolchain-dep_providers"></a>dep_providers |  List of groovy_deps targets bound to this toolchain.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="groovy_toolchain-groovyc"></a>groovyc |  The groovyc launcher target (script or in-process driver). Read via ctx.executable.groovyc.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="groovy_toolchain-runner_class"></a>runner_class |  FQCN of the test runner main class. Defaults to `org.junit.runner.JUnitCore` (JUnit 4). Set to `org.junit.platform.console.ConsoleLauncher` when the toolchain is wired for JUnit 5 (Jupiter / Spock 2.x). The module extension sets this automatically from the resolved `groovy.testing(junit = ...)` flavor.   | String | optional |  `"org.junit.runner.JUnitCore"`  |
 | <a id="groovy_toolchain-runtime_jar"></a>runtime_jar |  The groovy-X.Y.Z.jar to place on the runtime classpath.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="groovy_toolchain-sdk"></a>sdk |  Filegroup containing the full Groovy SDK contents.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="groovy_toolchain-version"></a>version |  Resolved SDK version string, e.g. '4.0.32'. Diagnostics only.   | String | required |  |
-
-
-<a id="GroovyDepsInfo"></a>
-
-## GroovyDepsInfo
-
-<pre>
-load("@rules_groovy//groovy:defs.bzl", "GroovyDepsInfo")
-
-GroovyDepsInfo(<a href="#GroovyDepsInfo-name">name</a>, <a href="#GroovyDepsInfo-java_info">java_info</a>)
-</pre>
-
-Named bundle of JavaInfo-providing deps reachable from a toolchain (dep_providers indirection).
-
-**FIELDS**
-
-| Name  | Description |
-| :------------- | :------------- |
-| <a id="GroovyDepsInfo-name"></a>name |  string: logical name (e.g. 'junit_runner', 'spock', 'hamcrest').    |
-| <a id="GroovyDepsInfo-java_info"></a>java_info |  JavaInfo: the actual dep bundle for consumers.    |
 
 
 <a id="GroovyLibraryInfo"></a>
@@ -156,7 +112,7 @@ Groovy-specific library metadata. Companion to `JavaInfo` on every `groovy_libra
 <pre>
 load("@rules_groovy//groovy:defs.bzl", "GroovyToolchainInfo")
 
-GroovyToolchainInfo(<a href="#GroovyToolchainInfo-groovyc">groovyc</a>, <a href="#GroovyToolchainInfo-sdk_files">sdk_files</a>, <a href="#GroovyToolchainInfo-runtime_jar">runtime_jar</a>, <a href="#GroovyToolchainInfo-version">version</a>, <a href="#GroovyToolchainInfo-runner_class">runner_class</a>)
+GroovyToolchainInfo(<a href="#GroovyToolchainInfo-groovyc">groovyc</a>, <a href="#GroovyToolchainInfo-sdk_files">sdk_files</a>, <a href="#GroovyToolchainInfo-runtime_jar">runtime_jar</a>, <a href="#GroovyToolchainInfo-version">version</a>)
 </pre>
 
 Resolved Groovy SDK + runtime info for a single toolchain instance.
@@ -169,7 +125,6 @@ Resolved Groovy SDK + runtime info for a single toolchain instance.
 | <a id="GroovyToolchainInfo-sdk_files"></a>sdk_files |  depset[File]: full SDK contents for action inputs.    |
 | <a id="GroovyToolchainInfo-runtime_jar"></a>runtime_jar |  File: the groovy-X.Y.Z.jar to put on the runtime classpath.    |
 | <a id="GroovyToolchainInfo-version"></a>version |  string: e.g. '4.0.32'. Diagnostics only - actions read SDK files, not the version string.    |
-| <a id="GroovyToolchainInfo-runner_class"></a>runner_class |  string: FQCN of the test runner main class. `org.junit.runner.JUnitCore` for JUnit 4, `org.junit.platform.console.ConsoleLauncher` for JUnit 5. Consumed by `groovy_test`'s launcher template to pick the right invocation shape.    |
 
 
 <a id="path_to_class"></a>
@@ -362,16 +317,10 @@ Convenience macro for JUnit 5 (Jupiter)-driven Groovy tests.
 
 Mirrors `groovy_junit_test`'s signature but routes the runtime
 through `org.junit.platform.console.ConsoleLauncher`. Jupiter API,
-Jupiter Engine, and the full Platform launcher classpath
-(platform-launcher / engine / commons, opentest4j, apiguardian-api)
-come off the active toolchain's `dep_providers` (logical names
-`"junit_api"`, `"junit_engine"`, `"junit_platform_launcher"`, etc.).
-
-Wiring this on top of a JUnit-4-only toolchain fails at runtime
-(ConsoleLauncher isn't on the classpath). Either declare
-`groovy.testing(junit = "5")` in your `MODULE.bazel`, or accept the
-Groovy-4 default which auto-promotes to JUnit 5 because Spock 2.x
-requires it.
+Jupiter Engine, and the Platform Console artifact must land on the
+test classpath via `deps` — typically by `maven.install(...)` in
+MODULE.bazel and `@maven//:...` labels here. See
+`examples/junit5_external/`.
 
 The generated `name + "-groovylib"` target lives at macro-scope
 visibility — callers do not reach into it directly.
@@ -424,9 +373,8 @@ Convenience macro for JUnit-4-driven Groovy tests with helper sources.
 
 Splits inputs into a test-only library + a `groovy_test` target. Use
 this when your tests share helper Groovy or Java types that aren't
-themselves test specifications. JUnit jars come from the active
-toolchain's `dep_providers`, not a literal `@junit_artifact` label
-(ISSUE-061).
+themselves test specifications. JUnit jars come in via `deps`,
+typically resolved by `rules_jvm_external`'s `maven.install`.
 
 `tests` are the JUnit-runnable specs; `groovy_srcs` and `java_srcs`
 are compiled into supporting libraries on the test classpath. The
@@ -477,28 +425,27 @@ groovy_test(*, <a href="#groovy_test-name">name</a>, <a href="#groovy_test-deps"
             <a href="#groovy_test-target_compatible_with">target_compatible_with</a>, <a href="#groovy_test-testonly">testonly</a>, <a href="#groovy_test-toolchains">toolchains</a>, <a href="#groovy_test-visibility">visibility</a>)
 </pre>
 
-Runs Groovy tests under the toolchain-selected JUnit runner.
+Runs Groovy tests under an explicit JVM main class.
 
 Source filenames are converted to fully-qualified class names by
 stripping the longest matching prefix in `src_roots`, then dropping
 the `.groovy` / `.java` extension. Each derived class is passed to the
-runner main class (`org.junit.runner.JUnitCore` for JUnit 4 toolchains,
-`org.junit.platform.console.ConsoleLauncher` for JUnit 5 ones — the
-active toolchain owns the choice) at execution time.
+`runner_class` main at execution time (positional FQCN args for
+`org.junit.runner.JUnitCore`; `--select-class <FQCN>` per spec for
+`org.junit.platform.console.ConsoleLauncher`).
 
 The default `src_roots` matches Maven-style layouts at the workspace
 root (`src/test/groovy`, `src/test/java`). Override it to host tests
 under arbitrary directory trees — e.g. `["example/foo/src/test/groovy"]`
 — without rewriting the call sites.
 
-For convenience wrappers around JUnit/Spock that also handle library
-splitting, see `groovy_junit_test`, `groovy_junit5_test`, and
-`spock_test`.
+JUnit / Spock jars come in via `deps` — they are user concerns,
+typically resolved by `rules_jvm_external`'s `maven.install`. See
+`examples/junit5_external/` for the canonical wiring.
 
-JUnit / Spock jars land on the test classpath through the active
-toolchain's `dep_providers` (logical names like `"junit_runner"`,
-`"spock"`); the test rules no longer carry literal `@junit_artifact`
-/ `@spock_artifact` labels (ISSUE-061).
+For convenience wrappers that hardcode the runner and split test
+sources into a side library, see `groovy_junit_test`,
+`groovy_junit5_test`, and `spock_test`.
 
 **ATTRIBUTES**
 
@@ -520,7 +467,7 @@ toolchain's `dep_providers` (logical names like `"junit_runner"`,
 | <a id="groovy_test-jvm_flags"></a>jvm_flags |  Flags embedded into the generated test launcher script.   | List of strings | optional |  `[]`  |
 | <a id="groovy_test-package_metadata"></a>package_metadata |  <a href="https://bazel.build/reference/be/common-definitions#common.package_metadata">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a>; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
 | <a id="groovy_test-restricted_to"></a>restricted_to |  <a href="https://bazel.build/reference/be/common-definitions#common.restricted_to">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a>; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
-| <a id="groovy_test-runner_class"></a>runner_class |  FQCN of the JVM main class the launcher exec's. Empty falls back to the active toolchain's `runner_class`. Set explicitly to pin a runner per test (e.g. `"org.junit.platform.console.ConsoleLauncher"`).   | String | optional |  `""`  |
+| <a id="groovy_test-runner_class"></a>runner_class |  FQCN of the JVM main class the launcher exec's. Mandatory; pick the runner matching the test framework you wired in `deps` (e.g. `"org.junit.platform.console.ConsoleLauncher"`).   | String | optional |  `""`  |
 | <a id="groovy_test-size"></a>size |  Bazel test size — `small`, `medium`, `large`, or `enormous`. Defaults to `medium`.   | String; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `"medium"`  |
 | <a id="groovy_test-src_roots"></a>src_roots |  Source-root prefixes used to derive each test's FQCN. Defaults to `["src/test/groovy", "src/test/java"]`. Longest matching root wins.   | List of strings | optional |  `["src/test/groovy", "src/test/java"]`  |
 | <a id="groovy_test-tags"></a>tags |  <a href="https://bazel.build/reference/be/common-definitions#common.tags">Inherited rule attribute</a>   | List of strings; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
@@ -543,15 +490,17 @@ spock_test(*, <a href="#spock_test-name">name</a>, <a href="#spock_test-deps">de
            <a href="#spock_test-target_compatible_with">target_compatible_with</a>, <a href="#spock_test-testonly">testonly</a>, <a href="#spock_test-toolchains">toolchains</a>, <a href="#spock_test-visibility">visibility</a>)
 </pre>
 
-Convenience macro for Spock specifications.
+Convenience macro for Spock 2.x specifications.
 
 Wraps `specs` in a test-only `groovy_library` and emits a
-`groovy_test`. The Spock jar version is selected by the active
-toolchain's Groovy major.minor — Groovy 2.5 pulls Spock 1.3 (JUnit
-4 path), Groovy 3.0 / 4.0 pull Spock 2.3 (JUnit 5 Platform path).
-The launcher invocation auto-routes through `JUnitCore` or
-`ConsoleLauncher` based on the toolchain's resolved `runner_class`;
-the macro itself stays signature-stable.
+`groovy_test` pointed at `org.junit.platform.console.ConsoleLauncher`
+(Spock 2.x discovers specs via the JUnit Platform engine). The Spock
+jar matching the active Groovy toolchain version comes in via `deps`
+— e.g. `org.spockframework:spock-core:2.4-groovy-4.0` for Groovy
+4.0 — typically resolved by `rules_jvm_external`'s `maven.install`.
+
+Users on Spock 1.3 (Groovy 2.5, JUnit 4 path) should wire
+`groovy_test` directly with `runner_class = "org.junit.runner.JUnitCore"`.
 
 Spock and JUnit jars come off the active toolchain's `dep_providers`
 (logical names `"spock"`, `"junit_runner"`, `"junit_api"`, etc.); no

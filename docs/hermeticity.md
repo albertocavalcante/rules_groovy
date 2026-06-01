@@ -25,10 +25,11 @@ For every compile, packaging, and test action `rules_groovy` emits:
    `jar` / `singlejar` come from Bazel's
    `java_runtime_toolchain_type` and `java_toolchain_type`. No
    hardcoded `/usr/bin/java`.
-4. **Downloads are integrity-pinned.** Every URL the module
-   extension fetches has a `sha256-...` integrity hash. The Groovy
-   SDK, JUnit, Spock, Hamcrest, opentest4j, and the JUnit 5 Platform
-   set are all pinned in `groovy/private/versions.bzl`.
+4. **Downloads are integrity-pinned.** The Groovy SDK is pinned in
+   `groovy/private/versions.bzl` with a `sha256-...` integrity hash.
+   Test framework jars (JUnit, Spock, etc.) come in via
+   `rules_jvm_external`'s `maven.install`, which captures per-artifact
+   SHAs in a committed `maven_install.json` lockfile.
 5. **All URLs are overridable.** Every `urls` list, every
    `integrity` value, every `strip_prefix`, and every `lib_jar` path
    can be overridden from `MODULE.bazel` without forking the rules.
@@ -55,7 +56,7 @@ For every compile, packaging, and test action `rules_groovy` emits:
 | `GroovySingleJar` packaging | [`groovy/private/actions.bzl`](../groovy/private/actions.bzl) | `ctx.actions.run(...)` against `single_jar` from `JAVA_TOOLCHAIN_TYPE`. `env = {}` (singlejar is a hermetic native binary; needs no env). `--add_missing_directories` for `java_library` parity. `--normalize` for deterministic ordering. |
 | `Descriptor Set` / `Java headers` etc. | upstream `rules_java` actions | Inherit `rules_java`'s hermeticity contract; nothing in `rules_groovy` modifies these. |
 | `groovyc_wrapper.sh` | [`groovy/private/groovyc_wrapper.sh`](../groovy/private/groovyc_wrapper.sh) | No `which` / `command -v`. SDK located via `external/*/groovy-*/bin/groovyc` glob — runfiles tree, not host. `jar` tool via explicit `$JAVA_HOME/bin/jar`. `set -eu` for fail-fast on missing env. |
-| `groovy_test` launcher | [`groovy/private/test.bzl`](../groovy/private/test.bzl) | `runner_class` sourced from the active toolchain (so JUnit-4 vs JUnit-5 selection is toolchain-driven, not host-driven). Java runtime from `JDK_RUNTIME_TOOLCHAIN_TYPE`. Classpath from `toolchain.dep_providers` + `ctx.attr.deps`. No host reads. |
+| `groovy_test` launcher | [`groovy/private/test.bzl`](../groovy/private/test.bzl) | `runner_class` set per-rule (mandatory attr; convenience macros hardcode the framework FQCN). Java runtime from `JDK_RUNTIME_TOOLCHAIN_TYPE`. Classpath from the toolchain's SDK file set + `ctx.attr.deps`. Test framework jars come in via `deps` — typically resolved by `rules_jvm_external`'s lockfile-pinned `maven.install`. No host reads. |
 | `groovy_binary` / `_groovy_sdk_runtime` | [`groovy/private/binary.bzl`](../groovy/private/binary.bzl) + [`groovy/private/runtime.bzl`](../groovy/private/runtime.bzl) | Wraps `rules_java`'s `java_binary`. The hidden `groovy_sdk_runtime` helper rule produces a `JavaInfo` over the toolchain's runtime jar; no host JARs, no host classpath. |
 | `groovy_library` | [`groovy/private/library.bzl`](../groovy/private/library.bzl) | Calls `compile_groovy` (audited above). Folds `sdk_runtime_javainfo(ctx)` into the library's `exports` so `groovy.lang.*` types reach every consumer transitively without naming `@groovy_sdk_artifact` by literal label. |
 | `groovy_sdk_repository` (download path) | [`groovy/private/repositories/sdk.bzl`](../groovy/private/repositories/sdk.bzl) | `http_archive`-shape repository rule. URL list comes from `versions.bzl` or the consumer's `groovy.toolchain(urls = ...)` override. Integrity hash is mandatory for unknown versions. |

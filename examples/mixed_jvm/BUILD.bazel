@@ -42,9 +42,15 @@ java_library(
     ],
 )
 
-# Verify cross-language invocation actually runs at test time.
+# Verify cross-language invocation actually runs at test time. JUnit 5
+# jars come from rules_jvm_external's `maven.install` in MODULE.bazel.
 groovy_junit5_test(
     name = "MixedTest",
     tests = ["src/test/groovy/mixed/MixedTest.groovy"],
-    deps = [":mixed"],
+    deps = [
+        ":mixed",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+        "@maven//:org_junit_jupiter_junit_jupiter_engine",
+        "@maven//:org_junit_platform_junit_platform_console",
+    ],
 )

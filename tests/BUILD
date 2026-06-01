@@ -1,5 +1,5 @@
 load("@rules_java//java:defs.bzl", "java_binary", "java_library")
-load("//groovy:defs.bzl", "groovy_deps", "groovy_library", "groovy_toolchain")
+load("//groovy:defs.bzl", "groovy_library", "groovy_toolchain")
 load(":hermeticity_test.bzl", "hermeticity_test")
 load(
     ":path_to_class_test.bzl",
@@ -9,7 +9,7 @@ load(
     "no_match_failure_test",
     "no_match_rule",
 )
-load(":toolchain_test.bzl", "groovy_deps_rejects_non_java_test", "toolchain_rejects_non_deps_provider_test", "toolchain_round_trip_test")
+load(":toolchain_test.bzl", "toolchain_round_trip_test")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -36,30 +36,17 @@ filegroup(
     srcs = ["fake_groovy.jar"],
 )
 
-# A genuine JavaInfo-providing target so `groovy_deps` analysis succeeds.
+# A genuine JavaInfo-providing target kept around for hermeticity coverage
+# and potential future toolchain-attr negative tests.
 java_library(
     name = "fake_junit",
     srcs = ["FakeJunit.java"],
 )
 
-# A non-JavaInfo target used as a negative-case input for `groovy_deps`.
-filegroup(
-    name = "not_a_java_target",
-    srcs = ["fake_sdk_marker.txt"],
-)
-
-# Round-trip fixtures --------------------------------------------------------
-
-groovy_deps(
-    name = "junit_runner_deps",
-    dep = ":fake_junit",
-    dep_name = "junit_runner",
-    tags = ["manual"],
-)
+# Round-trip fixture --------------------------------------------------------
 
 groovy_toolchain(
     name = "round_trip_toolchain",
-    dep_providers = [":junit_runner_deps"],
     groovyc = ":fake_groovyc",
     runtime_jar = ":fake_runtime_jar",
     sdk = ":fake_sdk",
@@ -72,42 +59,9 @@ toolchain_round_trip_test(
     target_under_test = ":round_trip_toolchain",
 )
 
-# Negative case: groovy_deps rejects a non-JavaInfo target ------------------
-
-groovy_deps(
-    name = "bad_groovy_deps",
-    dep = ":not_a_java_target",
-    dep_name = "broken",
-    tags = ["manual"],
-)
-
-groovy_deps_rejects_non_java_test(
-    name = "groovy_deps_rejects_non_java_analysis_test",
-    target_under_test = ":bad_groovy_deps",
-)
-
-# Negative case: groovy_toolchain rejects a non-GroovyDepsInfo entry --------
-
-groovy_toolchain(
-    name = "bad_toolchain",
-    dep_providers = [":fake_junit"],  # java_library does not provide GroovyDepsInfo
-    groovyc = ":fake_groovyc",
-    runtime_jar = ":fake_runtime_jar",
-    sdk = ":fake_sdk",
-    tags = ["manual"],
-    version = "4.0.32",
-)
-
-toolchain_rejects_non_deps_provider_test(
-    name = "toolchain_rejects_non_deps_provider_analysis_test",
-    target_under_test = ":bad_toolchain",
-)
-
 test_suite(
     name = "all_toolchain_tests",
     tests = [
-        ":groovy_deps_rejects_non_java_analysis_test",
-        ":toolchain_rejects_non_deps_provider_analysis_test",
         ":toolchain_round_trip_analysis_test",
     ],
 )

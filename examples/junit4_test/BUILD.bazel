@@ -5,12 +5,14 @@ groovy_library(
     srcs = ["src/main/groovy/calc/Calc.groovy"],
 )
 
-# `groovy_junit_test` runs under the toolchain's `runner_class`, which
-# the module extension keeps at `org.junit.runner.JUnitCore` because
-# Groovy 2.5 + Spock 1.3 does not trigger the JUnit 5 auto-promotion
-# path. Sources use `@org.junit.Test` and `org.junit.Assert`.
+# `groovy_junit_test` pins the runner to `org.junit.runner.JUnitCore`.
+# The JUnit 4 jar (plus hamcrest-core transitively) comes from
+# rules_jvm_external's `maven.install` in MODULE.bazel.
 groovy_junit_test(
     name = "CalcTest",
     tests = ["src/test/groovy/calc/CalcTest.groovy"],
-    deps = [":calc"],
+    deps = [
+        ":calc",
+        "@maven//:junit_junit",
+    ],
 )

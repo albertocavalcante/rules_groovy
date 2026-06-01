@@ -10,24 +10,17 @@ groovy_library(
     visibility = ["//visibility:public"],
 )
 
-# JUnit 4 test on top of `:lib`. The point of having a test here (vs.
-# build-only as before) is to prove the selected Groovy SDK both
-# compiles *and* runs end-to-end; otherwise `bazel test //...` exits
-# with status 4 ("no test targets found") and the CI cell never
-# actually exercises the per-version path it claims to.
-#
-# Spock is deliberately *not* used here: Spock's compiler plugin is a
-# global AST transform that pins to a specific Groovy major.minor, so
-# the toolchain-bundled Spock 1.3-groovy-2.5 (chosen because Groovy
-# 2.5 is the lowest-version toolchain registered below) is loaded onto
-# every compile classpath and explodes against Groovy 3.0.x / 4.0.x
-# with `IncompatibleGroovyVersionException`. The `groovy.testing(spock
-# = False)` line in `MODULE.bazel` opts the example out of the
-# toolchain's Spock wiring so the JUnit 4 path stays clean across all
-# three SDKs. See ISSUE-071 and `examples/spock_test/` for the Spock
-# variant on a single Groovy major.
+# JUnit 4 test on top of `:lib`. Proves the selected Groovy SDK both
+# compiles *and* runs end-to-end across all three versions; otherwise
+# `bazel test //...` exits with status 4 ("no test targets found") and
+# the CI cell never actually exercises the per-version path it claims
+# to. See `examples/spock_test/` for the Spock variant on a single
+# Groovy major.
 groovy_junit_test(
     name = "LibTest",
     tests = ["src/test/groovy/lib/LibTest.groovy"],
-    deps = [":lib"],
+    deps = [
+        ":lib",
+        "@maven//:junit_junit",
+    ],
 )

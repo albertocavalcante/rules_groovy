@@ -54,24 +54,8 @@ bzl_library(
     name = "extensions_bzl",
     srcs = ["extensions.bzl"],
     deps = [
-        ":bazel_tools_repo_bzl",
         "//groovy/private:versions_bzl",
-        "//groovy/private/repositories:artifacts_bzl",
         "//groovy/private/repositories:hub_bzl",
         "//groovy/private/repositories:sdk_bzl",
-    ],
-)
-
-# Stub `bzl_library` wrapping the @bazel_tools repository-rule helpers
-# that extensions.bzl loads transitively. Stardoc's doc-extract walks
-# every `load()` and requires a bzl_library for each module; the
-# embedded @bazel_tools BUILD only exports the files via filegroup, so
-# we declare a thin bzl_library here to satisfy the resolver.
-bzl_library(
-    name = "bazel_tools_repo_bzl",
-    srcs = [
-        "@bazel_tools//tools/build_defs/repo:cache.bzl",
-        "@bazel_tools//tools/build_defs/repo:http.bzl",
-        "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],
 )
