@@ -16,16 +16,17 @@
 `groovy_junit5_test`, `spock_test`, and the `path_to_class` FQCN helper.
 
 Every public test wrapper is a Bazel-8+ symbolic macro wrapping the
-internal `_groovy_test` rule. Toolchain-resolved launcher writer +
-runfiles assembly. JUnit / Spock jars come off the toolchain's
-`dep_providers` list (logical names like `"junit_runner"`, `"spock"`),
-not literal `@junit_artifact` / `@spock_artifact` labels (ISSUE-061).
+internal `_groovy_test` rule. The rule resolves a classpath off the
+Groovy SDK + caller-supplied `deps`; the framework runner FQCN comes
+from the rule's mandatory `runner_class` attr. Convenience macros
+hardcode the runner per framework. Test framework jars (JUnit, Spock,
+etc.) are user concerns; pass them via `deps`, typically resolved by
+`rules_jvm_external`'s `maven.install`.
 """
 
 load("@rules_java//java:defs.bzl", "JavaInfo", "java_library")
 load(
     "//groovy/private:actions.bzl",
-    "GROOVY_TOOLCHAIN_TYPE",
     "JUNIT4_CORE",
     "JUNIT5_CONSOLE_LAUNCHER",
     "REQUIRED_TOOLCHAINS",
@@ -95,22 +96,24 @@ def path_to_class(path, src_roots = _DEFAULT_SRC_ROOTS):
 # ---------------------------------------------------------------------------
 
 def _groovy_test_impl(ctx):
-    # Resolve the runtime classpath off the toolchain + caller-supplied deps.
+    # Resolve the runtime classpath off the SDK + caller-supplied deps.
     classpath = test_runtime_classpath(ctx, ctx.attr.deps)
     classes = [path_to_class(src.path, ctx.attr.src_roots) for src in ctx.files.srcs]
 
-    # Explicit `runner_class` attr wins; empty falls back to the toolchain
-    # (legacy path until the testing extension is removed).
-    runner_class = ctx.attr.runner_class
-    if not runner_class:
-        runner_class = ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].groovy_info.runner_class
+    if not ctx.attr.runner_class:
+        fail(("groovy_test {} is missing `runner_class`. Set it explicitly " +
+              "(e.g. `\"{j5}\"`), or use one of `groovy_junit_test` / " +
+              "`groovy_junit5_test` / `spock_test` which set it for you.").format(
+            ctx.label,
+            j5 = JUNIT5_CONSOLE_LAUNCHER,
+        ))
 
     write_test_launcher(
         ctx = ctx,
         classpath = classpath,
         classes = classes,
         jvm_flags = ctx.attr.jvm_flags,
-        runner_class = runner_class,
+        runner_class = ctx.attr.runner_class,
     )
 
     java_runtime = ctx.toolchains["@bazel_tools//tools/jdk:runtime_toolchain_type"].java_runtime
@@ -136,9 +139,7 @@ _groovy_test = rule(
         "jvm_flags": attr.string_list(),
         "deps": attr.label_list(allow_files = [".jar"]),
         "runner_class": attr.string(
-            default = "",
-            doc = "FQCN of the JVM main class the launcher exec's. Empty " +
-                  "falls back to the active toolchain's `runner_class`. " +
+            doc = "FQCN of the JVM main class the launcher exec's. " +
                   "Convenience macros set this per framework " +
                   "(`org.junit.runner.JUnitCore` for `groovy_junit_test`; " +
                   "`org.junit.platform.console.ConsoleLauncher` for " +
@@ -242,35 +243,33 @@ groovy_test = macro(
                   "Longest matching root wins.",
         ),
         "runner_class": attr.string(
-            default = "",
-            doc = "FQCN of the JVM main class the launcher exec's. Empty " +
-                  "falls back to the active toolchain's `runner_class`. " +
-                  "Set explicitly to pin a runner per test (e.g. `\"" +
-                  JUNIT5_CONSOLE_LAUNCHER + "\"`).",
+            doc = "FQCN of the JVM main class the launcher exec's. " +
+                  "Mandatory; pick the runner matching the test framework " +
+                  "you wired in `deps` (e.g. `\"" + JUNIT5_CONSOLE_LAUNCHER +
+                  "\"`).",
         ),
     },
-    doc = """Runs Groovy tests under the toolchain-selected JUnit runner.
+    doc = """Runs Groovy tests under an explicit JVM main class.
 
 Source filenames are converted to fully-qualified class names by
 stripping the longest matching prefix in `src_roots`, then dropping
 the `.groovy` / `.java` extension. Each derived class is passed to the
-runner main class (`org.junit.runner.JUnitCore` for JUnit 4 toolchains,
-`org.junit.platform.console.ConsoleLauncher` for JUnit 5 ones — the
-active toolchain owns the choice) at execution time.
+`runner_class` main at execution time (positional FQCN args for
+`org.junit.runner.JUnitCore`; `--select-class <FQCN>` per spec for
+`org.junit.platform.console.ConsoleLauncher`).
 
 The default `src_roots` matches Maven-style layouts at the workspace
 root (`src/test/groovy`, `src/test/java`). Override it to host tests
 under arbitrary directory trees — e.g. `["example/foo/src/test/groovy"]`
 — without rewriting the call sites.
 
-For convenience wrappers around JUnit/Spock that also handle library
-splitting, see `groovy_junit_test`, `groovy_junit5_test`, and
-`spock_test`.
+JUnit / Spock jars come in via `deps` — they are user concerns,
+typically resolved by `rules_jvm_external`'s `maven.install`. See
+`examples/junit5_external/` for the canonical wiring.
 
-JUnit / Spock jars land on the test classpath through the active
-toolchain's `dep_providers` (logical names like `"junit_runner"`,
-`"spock"`); the test rules no longer carry literal `@junit_artifact`
-/ `@spock_artifact` labels (ISSUE-061).
+For convenience wrappers that hardcode the runner and split test
+sources into a side library, see `groovy_junit_test`,
+`groovy_junit5_test`, and `spock_test`.
 """,
 )
 
@@ -355,9 +354,8 @@ groovy_junit_test = macro(
 
 Splits inputs into a test-only library + a `groovy_test` target. Use
 this when your tests share helper Groovy or Java types that aren't
-themselves test specifications. JUnit jars come from the active
-toolchain's `dep_providers`, not a literal `@junit_artifact` label
-(ISSUE-061).
+themselves test specifications. JUnit jars come in via `deps`,
+typically resolved by `rules_jvm_external`'s `maven.install`.
 
 `tests` are the JUnit-runnable specs; `groovy_srcs` and `java_srcs`
 are compiled into supporting libraries on the test classpath. The
@@ -444,16 +442,10 @@ groovy_junit5_test = macro(
 
 Mirrors `groovy_junit_test`'s signature but routes the runtime
 through `org.junit.platform.console.ConsoleLauncher`. Jupiter API,
-Jupiter Engine, and the full Platform launcher classpath
-(platform-launcher / engine / commons, opentest4j, apiguardian-api)
-come off the active toolchain's `dep_providers` (logical names
-`"junit_api"`, `"junit_engine"`, `"junit_platform_launcher"`, etc.).
-
-Wiring this on top of a JUnit-4-only toolchain fails at runtime
-(ConsoleLauncher isn't on the classpath). Either declare
-`groovy.testing(junit = "5")` in your `MODULE.bazel`, or accept the
-Groovy-4 default which auto-promotes to JUnit 5 because Spock 2.x
-requires it.
+Jupiter Engine, and the Platform Console artifact must land on the
+test classpath via `deps` — typically by `maven.install(...)` in
+MODULE.bazel and `@maven//:...` labels here. See
+`examples/junit5_external/`.
 
 The generated `name + "-groovylib"` target lives at macro-scope
 visibility — callers do not reach into it directly.
@@ -461,10 +453,9 @@ visibility — callers do not reach into it directly.
 )
 
 # ---------------------------------------------------------------------------
-# spock_test — Spock specifications. Same macro shape as the JUnit wrappers;
-# the toolchain's `runner_class` flips to `ConsoleLauncher` automatically
-# under Spock 2.x toolchains (Groovy 3.0 / 4.0), staying on `JUnitCore`
-# under Spock 1.3 toolchains (Groovy 2.5).
+# spock_test — Spock specifications. Hardcodes the JUnit 5 Platform
+# `ConsoleLauncher` as the runner; users on Spock 1.3 (JUnit 4) wire
+# `groovy_test` directly with `runner_class = JUNIT4_CORE`.
 # ---------------------------------------------------------------------------
 
 def _spock_test_impl(
@@ -537,15 +528,17 @@ spock_test = macro(
         "size": attr.string(default = "small", configurable = False),
         "src_roots": attr.string_list(default = _DEFAULT_SRC_ROOTS),
     },
-    doc = """Convenience macro for Spock specifications.
+    doc = """Convenience macro for Spock 2.x specifications.
 
 Wraps `specs` in a test-only `groovy_library` and emits a
-`groovy_test`. The Spock jar version is selected by the active
-toolchain's Groovy major.minor — Groovy 2.5 pulls Spock 1.3 (JUnit
-4 path), Groovy 3.0 / 4.0 pull Spock 2.3 (JUnit 5 Platform path).
-The launcher invocation auto-routes through `JUnitCore` or
-`ConsoleLauncher` based on the toolchain's resolved `runner_class`;
-the macro itself stays signature-stable.
+`groovy_test` pointed at `org.junit.platform.console.ConsoleLauncher`
+(Spock 2.x discovers specs via the JUnit Platform engine). The Spock
+jar matching the active Groovy toolchain version comes in via `deps`
+— e.g. `org.spockframework:spock-core:2.4-groovy-4.0` for Groovy
+4.0 — typically resolved by `rules_jvm_external`'s `maven.install`.
+
+Users on Spock 1.3 (Groovy 2.5, JUnit 4 path) should wire
+`groovy_test` directly with `runner_class = "org.junit.runner.JUnitCore"`.
 
 Spock and JUnit jars come off the active toolchain's `dep_providers`
 (logical names `"spock"`, `"junit_runner"`, `"junit_api"`, etc.); no

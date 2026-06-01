@@ -15,5 +15,4 @@ package(default_visibility = ["//groovy/private/repositories:__pkg__"])
 exports_files([
     "sdk.BUILD.tpl",
     "local_sdk.BUILD.tpl",
-    "artifacts.BUILD.tpl",
 ])

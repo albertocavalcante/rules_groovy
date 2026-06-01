@@ -97,57 +97,6 @@ def _deps_classpath(deps):
     ]
     return depset(transitive = java_info_jars + non_java_file_depsets)
 
-def _toolchain_dep_provider_jars(ctx):
-    """Every `GroovyDepsInfo.java_info.transitive_runtime_jars` from the toolchain.
-
-    The module extension wires JUnit / Spock / Jupiter / Platform jars on
-    the toolchain as `groovy_deps(dep_name = "junit_runner", ...)` etc.
-    Folding them into both compile and runtime classpaths means
-    `groovy_junit_test`, `groovy_junit5_test`, and `spock_test` no longer
-    need to add literal `@junit_artifact` / `@spock_artifact` labels to
-    their generated `groovy_library`'s `deps` — the toolchain owns the
-    wiring (ISSUE-061).
-
-    The cost on a non-test `groovy_library` compile is some extra jars on
-    the compile classpath; JVM compilation is order-independent and
-    unused jars do not affect output. The benefit is the test-macro
-    surface stays free of hardcoded compat-repo labels.
-    """
-    transitive = []
-    for dep in ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].deps:
-        if dep.java_info != None:
-            transitive.append(dep.java_info.transitive_runtime_jars)
-    return depset(transitive = transitive)
-
-def toolchain_deps_by_name(ctx, names):
-    """Pick `GroovyDepsInfo` bundles off the toolchain by logical name.
-
-    Fails with a clear message if any requested name is not wired on the
-    resolved toolchain (e.g. asking for `"junit_api"` on a JUnit-4
-    toolchain).
-
-    Useful for rules that need a specific subset of the toolchain's test
-    framework deps (vs. consuming the whole set via
-    `_toolchain_dep_provider_jars`).
-
-    Args:
-      ctx:   the rule context (must resolve `GROOVY_TOOLCHAIN_TYPE`).
-      names: list[str] of `dep_name` keys from the toolchain's
-        `dep_providers`.
-
-    Returns:
-      A list of `JavaInfo` providers in the same order as `names`.
-    """
-    deps_info_list = ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].deps
-    by_name = {info.name: info.java_info for info in deps_info_list}
-    missing = [n for n in names if n not in by_name]
-    if missing:
-        fail("Toolchain missing required dep_providers: {} (have: {})".format(
-            missing,
-            sorted(by_name.keys()),
-        ))
-    return [by_name[n] for n in names]
-
 def compile_groovy(ctx, srcs, deps, output_jar):
     """Compile `.groovy` (and optionally `.java`) sources to a deterministic JAR.
 
@@ -171,20 +120,10 @@ def compile_groovy(ctx, srcs, deps, output_jar):
     java_runtime = _java_runtime(ctx)
     singlejar = _java_toolchain(ctx).single_jar
 
-    # Compile classpath includes:
-    #   * Caller-supplied deps (transitive runtime jars / bare .jar files).
-    #   * Every `GroovyDepsInfo` reachable from the toolchain (JUnit /
-    #     Spock / Jupiter / Platform jars). Folding the toolchain
-    #     test-framework jars in unconditionally means the test-rule
-    #     macros (`groovy_junit_test`, `groovy_junit5_test`, `spock_test`)
-    #     no longer need to thread `@junit_artifact` / `@spock_artifact`
-    #     labels through to the generated `groovy_library`'s deps —
-    #     ISSUE-061. The cost is some unused jars on a non-test
-    #     groovy_library's compile classpath; JVM compilation is
-    #     order-independent and unused jars do not affect output.
-    classpath = depset(
-        transitive = [_deps_classpath(deps), _toolchain_dep_provider_jars(ctx)],
-    )
+    # Compile classpath: caller-supplied deps (transitive runtime jars /
+    # bare .jar files). Test framework jars (JUnit, Spock, etc.) come in
+    # the same way — they are user concerns, not toolchain concerns.
+    classpath = _deps_classpath(deps)
     raw_jar = ctx.actions.declare_file(ctx.label.name + "_classes.jar")
 
     # 1) groovyc → raw_jar
@@ -251,16 +190,11 @@ def compile_groovy(ctx, srcs, deps, output_jar):
 def test_runtime_classpath(ctx, deps):
     """Build the runtime classpath depset for a groovy_test launcher.
 
-    Includes:
-      * The Groovy SDK's full file set (jars on the classpath; the SDK
-        contains the groovy runtime + the AST transforms).
-      * Every `GroovyDepsInfo` reachable from the toolchain (the JUnit /
-        Spock / Jupiter / Platform jars wired by the module extension).
-        Pulling these from the toolchain rather than caller `deps` means
-        the JUnit 5 platform jars (jupiter-engine, platform-launcher,
-        platform-engine, platform-commons, opentest4j, apiguardian-api)
-        land on the test classpath without every macro re-listing them.
-      * Caller-supplied deps' transitive runtime jars (JavaInfo) or raw .jars.
+    Includes the Groovy SDK file set (jars on the classpath; the SDK
+    contains the groovy runtime + the AST transforms) and the
+    caller-supplied deps' transitive runtime jars. Test framework jars
+    (JUnit, Spock, etc.) come in via `deps` — they are user concerns,
+    typically resolved by `rules_jvm_external`'s `maven.install`.
 
     Args:
       ctx:  the rule context (must resolve `GROOVY_TOOLCHAIN_TYPE`).
@@ -269,24 +203,12 @@ def test_runtime_classpath(ctx, deps):
 
     Returns:
       A `depset` of `File` carrying the full runtime classpath for the
-      test launcher.
+      test launcher. Non-jar files are filtered at flatten time inside
+      `write_test_launcher`.
     """
     groovy_info = _groovy_info(ctx)
-
-    toolchain_dep_jars = []
-    for dep in ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].deps:
-        if dep.java_info != None:
-            toolchain_dep_jars.append(dep.java_info.transitive_runtime_jars)
-
-    # Return the SDK's file depset transitively rather than flattening
-    # it to filter for `.jar` (Bazel perf doc: avoid `to_list()`). The
-    # launcher-script writer (`write_test_launcher`) must flatten the
-    # final classpath anyway — it calls `ctx.actions.write` which can't
-    # consume `ctx.actions.args` — and applies the `.jar` filter at
-    # write-time, where the cost is bounded by the single flatten we
-    # already pay.
     return depset(
-        transitive = [groovy_info.sdk_files, _deps_classpath(deps)] + toolchain_dep_jars,
+        transitive = [groovy_info.sdk_files, _deps_classpath(deps)],
     )
 
 # Runner main-class FQCNs the convenience macros hardcode per framework.

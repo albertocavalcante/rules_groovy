@@ -16,11 +16,6 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 package(default_visibility = ["//visibility:public"])
 
 bzl_library(
-    name = "artifacts_bzl",
-    srcs = ["artifacts.bzl"],
-)
-
-bzl_library(
     name = "hub_bzl",
     srcs = ["hub.bzl"],
 )

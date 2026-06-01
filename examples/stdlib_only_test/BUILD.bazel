@@ -1,14 +1,14 @@
 load("@rules_groovy//groovy:defs.bzl", "groovy_junit5_test")
 
-# A JUnit 5 test whose source uses only Groovy + JDK stdlib types. No
-# user-declared Maven deps, no per-target `src_roots` override — the
-# example IS its own module, so the default Maven-style `src/test/groovy`
-# layout works as-is.
-#
-# JUnit 5 (Jupiter) is the active flavor because the default Groovy 4.0
-# toolchain auto-promotes `groovy.testing` to JUnit 5 (Spock 2.x runs on
-# the JUnit Platform — see ISSUE-023).
+# A JUnit 5 test whose source uses only Groovy + JDK stdlib types.
+# JUnit 5 framework jars come from rules_jvm_external's `maven.install`
+# in MODULE.bazel.
 groovy_junit5_test(
     name = "StdlibTest",
     tests = ["src/test/groovy/stdlib/StdlibTest.groovy"],
+    deps = [
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+        "@maven//:org_junit_jupiter_junit_jupiter_engine",
+        "@maven//:org_junit_platform_junit_platform_console",
+    ],
 )

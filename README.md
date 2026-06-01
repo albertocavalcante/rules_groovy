@@ -21,7 +21,9 @@ use_repo(groovy, "groovy_toolchains")
 register_toolchains("@groovy_toolchains//:all")
 ```
 
-Groovy 4.0.32 is the default. JUnit 5 and Spock 2.x wire automatically. Bazel 9.0+ required; WORKSPACE is not supported.
+Groovy 4.0.32 is the default. Bazel 9.0+ required; WORKSPACE is not supported.
+
+Test framework jars (JUnit, Spock, etc.) come from your own `rules_jvm_external` `maven.install` — see [`examples/junit5_external/`](examples/junit5_external/).
 
 ## Quickstart
 
@@ -62,11 +64,12 @@ Each subdir is a self-contained Bazel module that consumes `rules_groovy` via `l
 | Example | Demonstrates |
 |---|---|
 | [`minimal_library`](examples/minimal_library/) | smallest downstream consumer |
-| [`stdlib_only_test`](examples/stdlib_only_test/) | `groovy_junit5_test` against JDK + Groovy stdlibs only |
-| [`junit4_test`](examples/junit4_test/) | JUnit 4 wiring |
-| [`junit5_test`](examples/junit5_test/) | JUnit 5 Jupiter wiring |
-| [`spock_test`](examples/spock_test/) | Spock 2.3 on the JUnit 5 Platform |
-| [`maven_dep`](examples/maven_dep/) | `rules_jvm_external` interop |
+| [`junit5_external`](examples/junit5_external/) | canonical JUnit 5 wiring via `rules_jvm_external` |
+| [`stdlib_only_test`](examples/stdlib_only_test/) | `groovy_junit5_test` whose source uses Groovy + JDK stdlib only |
+| [`junit4_test`](examples/junit4_test/) | JUnit 4 + Groovy 2.5 |
+| [`junit5_test`](examples/junit5_test/) | JUnit 5 Jupiter |
+| [`spock_test`](examples/spock_test/) | Spock 2.x on the JUnit 5 Platform |
+| [`maven_dep`](examples/maven_dep/) | `rules_jvm_external` interop on production deps |
 | [`mixed_jvm`](examples/mixed_jvm/) | mixed `.groovy` + `.java` joint compile |
 | [`binary`](examples/binary/) | runnable `groovy_binary` |
 | [`multi_version`](examples/multi_version/) | per-build SDK selection via flag |
@@ -76,8 +79,6 @@ Each subdir is a self-contained Bazel module that consumes `rules_groovy` via `l
 | [`reproducibility`](examples/reproducibility/) | byte-reproducible output jars |
 | [`long_classpath`](examples/long_classpath/) | param-file classpath under Linux `ARG_MAX` |
 | [`local_toolchain`](examples/local_toolchain/) | BYO Groovy SDK from an on-disk path (no download) |
-| [`testing_maven_repo`](examples/testing_maven_repo/) | corporate-mirror Maven base URL for test artifacts |
-| [`junit5_external`](examples/junit5_external/) | recommended: JUnit 5 via `rules_jvm_external` `maven.install` |
 
 ## Air-gapped or offline environments
 
@@ -87,9 +88,9 @@ Every external download is integrity-pinned and every URL is overridable. The th
 
 Stardoc keeps the per-symbol docs in sync with the source.
 
-- [Public rules](docs/rules-public.md) — `groovy_library`, `groovy_and_java_library`, `groovy_binary`, `groovy_test`, `groovy_junit_test`, `spock_test`, `groovy_runtime`
-- [Toolchain](docs/rules-toolchain.md) — `GroovyToolchainInfo`, `GroovyDepsInfo`, `groovy_toolchain`, `groovy_deps`
-- [Module extension](docs/rules-extension.md) — `groovy.toolchain`, `groovy.local_toolchain`, `groovy.testing` tag classes
+- [Public rules](docs/rules-public.md) — `groovy_library`, `groovy_and_java_library`, `groovy_binary`, `groovy_test`, `groovy_junit_test`, `groovy_junit5_test`, `spock_test`, `groovy_runtime`
+- [Toolchain](docs/rules-toolchain.md) — `GroovyToolchainInfo`, `GroovyLibraryInfo`, `groovy_toolchain`
+- [Module extension](docs/rules-extension.md) — `groovy.toolchain`, `groovy.local_toolchain` tag classes
 
 ## Why this fork
 
@@ -97,8 +98,7 @@ A short list of what this fork does that other JVM Bazel rulesets do not.
 
 - **Bazel-9-only, bzlmod-only.** No WORKSPACE, no compat matrix tax — the rule set is small because it serves one ecosystem cleanly.
 - **Multi-version Groovy coexistence is first-class.** Pin 2.5, 3.0, and 4.0 in the same build via repeated `groovy.toolchain` tags; pick one at build time with `--@rules_groovy//groovy/config_settings:groovy_version=<version>`.
-- **Zero mandatory transitive deps beyond `rules_java`.** No `rules_jvm_external`, no `bazel_skylib` user-visible. JUnit and Spock ship via pinned `http_jar` defaults.
-- **Optional `rules_jvm_external` interop.** Pass any `JavaInfo`-providing label via `groovy.testing(*_label = ...)` to swap pinned test artifacts for Maven-resolved ones.
+- **Pure language ruleset.** Ships only the Groovy SDK; test framework deps come from your own `rules_jvm_external` `maven.install` (matches the rules_kotlin shape). No `groovy.testing` knob, no Maven base URL strings buried in module-extension state.
 - **Hermetic by construction.** See [Hermeticity](#hermeticity).
 
 ## Versioning and contributing

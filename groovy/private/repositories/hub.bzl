@@ -16,26 +16,24 @@
 
 The hub repo is the single user-facing handle: regardless of how many
 SDKs the user pinned (one default, or several `groovy.toolchain` /
-`groovy.local_toolchain` calls), the hub's `:all` filegroup gives a
-single `register_toolchains("@groovy_toolchains//:all")` line in
-`MODULE.bazel`.
+`groovy.local_toolchain` calls), the hub gives a single
+`register_toolchains("@groovy_toolchains//:all")` line in
+`MODULE.bazel` (`:all` is a target-pattern wildcard expanding to every
+`toolchain` rule the hub emits).
 
 Per spec the hub BUILD file contains, for each registered SDK:
 
-  * one `groovy_deps(...)` target per logical test dep (junit_runner,
-    junit_api, junit_engine, hamcrest, spock) — the `dep` of which is
-    where user `*_label` overrides land. The `groovy_toolchain` rule
-    never learns of the override; it only sees a `groovy_deps` target
-    with the right logical `dep_name`. That's the architectural payoff
-    of the `dep_providers` indirection on the toolchain rule.
+  * one `config_setting` matching the SDK's version against the
+    `@rules_groovy//groovy/config_settings:groovy_version` build flag.
   * one `groovy_toolchain(...)` pointing at the SDK repo's `:groovyc`,
     `:sdk`, `:runtime_jar`.
   * one `toolchain(...)` declaration registering the above against
-    `@rules_groovy//groovy:toolchain_type`.
+    `@rules_groovy//groovy:toolchain_type` with `target_settings`
+    keying off the version flag.
 
-A trailing `filegroup(name = "all", ...)` aggregates every toolchain
-declaration so the user's `register_toolchains` line stays one-liner-
-sized no matter how many SDKs the build pins.
+The SDK whose version equals `DEFAULT_GROOVY_VERSION` (or the first
+declared SDK, if no spec matches) also gets a second `toolchain(...)`
+gated on `:is_default` so the unset-flag case resolves cleanly.
 """
 
 def _groovy_toolchains_hub_repository_impl(rctx):

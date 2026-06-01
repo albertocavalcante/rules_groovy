@@ -18,8 +18,8 @@ Single load surface for every user-facing symbol in this ruleset:
 
   * Macros: `groovy_library`, `groovy_and_java_library`, `groovy_binary`,
     `groovy_test`, `groovy_junit_test`, `groovy_junit5_test`, `spock_test`.
-  * Rules: `groovy_runtime`, `groovy_toolchain`, `groovy_deps`.
-  * Providers: `GroovyToolchainInfo`, `GroovyDepsInfo`, `GroovyLibraryInfo`.
+  * Rules: `groovy_runtime`, `groovy_toolchain`.
+  * Providers: `GroovyToolchainInfo`, `GroovyLibraryInfo`.
   * Helpers: `path_to_class`.
 
 Every symbol is re-exported from a single-responsibility `.bzl` under
@@ -44,10 +44,8 @@ load(
 )
 load(
     "//groovy/private:toolchain.bzl",
-    _GroovyDepsInfo = "GroovyDepsInfo",
     _GroovyLibraryInfo = "GroovyLibraryInfo",
     _GroovyToolchainInfo = "GroovyToolchainInfo",
-    _groovy_deps = "groovy_deps",
     _groovy_toolchain = "groovy_toolchain",
 )
 
@@ -65,12 +63,10 @@ spock_test = _spock_test
 # Toolchain rules -----------------------------------------------------------
 
 groovy_toolchain = _groovy_toolchain
-groovy_deps = _groovy_deps
 
 # Providers -----------------------------------------------------------------
 
 GroovyToolchainInfo = _GroovyToolchainInfo
-GroovyDepsInfo = _GroovyDepsInfo
 GroovyLibraryInfo = _GroovyLibraryInfo
 
 # Helpers -------------------------------------------------------------------

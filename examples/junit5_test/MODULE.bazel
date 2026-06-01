@@ -1,4 +1,7 @@
-module(name = "rules_groovy_example_junit5_test", version = "0.0.0")
+module(
+    name = "rules_groovy_example_junit5_test",
+    version = "0.0.0",
+)
 
 bazel_dep(name = "rules_groovy", version = "0.0.0")
 local_path_override(
@@ -6,6 +9,21 @@ local_path_override(
     path = "../..",
 )
 
+bazel_dep(name = "rules_jvm_external", version = "7.0")
+
 groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
 use_repo(groovy, "groovy_toolchains")
+
 register_toolchains("@groovy_toolchains//:all")
+
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    artifacts = [
+        "org.junit.jupiter:junit-jupiter-api:5.11.0",
+        "org.junit.jupiter:junit-jupiter-engine:5.11.0",
+        "org.junit.platform:junit-platform-console:1.11.0",
+    ],
+    lock_file = "//:maven_install.json",
+    repositories = ["https://repo1.maven.org/maven2"],
+)
+use_repo(maven, "maven")

@@ -225,7 +225,6 @@ jobs:
           - override_url
           - custom_version
           - local_toolchain
-          - testing_maven_repo
           - junit5_external
     steps:
       - name: Checkout

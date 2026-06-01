@@ -5,11 +5,15 @@ groovy_library(
     srcs = ["src/main/groovy/calc/Calc.groovy"],
 )
 
-# Spock 2.x (matched to Groovy 4.0 by the extension) runs on the JUnit
-# Platform; the toolchain's `runner_class` resolves to
-# `org.junit.platform.console.ConsoleLauncher` automatically.
+# `spock_test` pins the runner to JUnit 5's ConsoleLauncher; Spock 2.x
+# discovers specs via the JUnit Platform engine. Spock + Platform jars
+# come from rules_jvm_external's `maven.install` in MODULE.bazel.
 spock_test(
     name = "CalcSpec",
     specs = ["src/test/groovy/calc/CalcSpec.groovy"],
-    deps = [":calc"],
+    deps = [
+        ":calc",
+        "@maven//:org_junit_platform_junit_platform_console",
+        "@maven//:org_spockframework_spock_core",
+    ],
 )
