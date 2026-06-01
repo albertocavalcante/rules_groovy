@@ -224,6 +224,7 @@ jobs:
           - long_classpath
           - override_url
           - custom_version
+          - local_toolchain
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -239,6 +240,21 @@ jobs:
           restore-keys: |
             bazel-disk-examples-${{ matrix.example }}-
             bazel-disk-examples-
+
+      # local_toolchain example demonstrates `groovy.local_toolchain` —
+      # the BYO-Groovy-SDK path. The example's MODULE.bazel hardcodes
+      # sdk_path = /opt/groovy-4.0.32; this step installs Groovy there
+      # so the toolchain resolves at extension-eval time. Local devs
+      # running the example outside CI must either install Groovy at
+      # the same path or edit sdk_path in MODULE.bazel.
+      - name: Install Groovy 4.0.32 at /opt/groovy-4.0.32 (local_toolchain example)
+        if: matrix.example == 'local_toolchain'
+        run: |
+          set -euo pipefail
+          curl -sSL -o /tmp/groovy.zip \
+            "https://archive.apache.org/dist/groovy/4.0.32/distribution/apache-groovy-binary-4.0.32.zip"
+          sudo unzip -q /tmp/groovy.zip -d /opt/
+          test -f /opt/groovy-4.0.32/lib/groovy-4.0.32.jar  # sanity
 
       # Each examples/<name>/ is its own Bazel module (a downstream-
       # consumer demo with no direct protobuf bazel_dep) so it can't

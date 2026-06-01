@@ -1,0 +1,30 @@
+module(name = "rules_groovy_example_local_toolchain", version = "0.0.0")
+
+bazel_dep(name = "rules_groovy", version = "0.0.0")
+local_path_override(
+    module_name = "rules_groovy",
+    path = "../..",
+)
+
+groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
+
+# BYO Groovy SDK from an on-disk path — no download, no integrity hash.
+# The repository rule symlinks the SDK as `groovy-<version>/` so the
+# `groovyc` launcher resolves the same way it does for downloaded SDKs.
+#
+# `sdk_path` must point at a real on-disk Groovy installation. CI
+# pre-installs Groovy 4.0.32 at /opt/groovy-4.0.32 (see the
+# `Install Groovy SDK for local_toolchain example` step in
+# `.github/workflows/ci.yml`). Local devs running this example outside
+# CI must either install Groovy at the same path or edit `sdk_path`
+# below to point at their installation (e.g. `/opt/homebrew/Cellar/
+# groovy/4.0.32/libexec` on macOS Homebrew).
+groovy.local_toolchain(
+    name = "groovy_local",
+    sdk_path = "/opt/groovy-4.0.32",
+    version = "4.0.32",
+    lib_jar = "lib/groovy-4.0.32.jar",
+)
+
+use_repo(groovy, "groovy_toolchains")
+register_toolchains("@groovy_toolchains//:all")

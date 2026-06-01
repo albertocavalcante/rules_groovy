@@ -75,10 +75,11 @@ Each subdir is a self-contained Bazel module that consumes `rules_groovy` via `l
 | [`codenarc`](examples/codenarc/) | CodeNarc as `bazel test`, via `@rules_groovy//groovy:runtime` |
 | [`reproducibility`](examples/reproducibility/) | byte-reproducible output jars |
 | [`long_classpath`](examples/long_classpath/) | param-file classpath under Linux `ARG_MAX` |
+| [`local_toolchain`](examples/local_toolchain/) | BYO Groovy SDK from an on-disk path (no download) |
 
 ## Air-gapped or offline environments
 
-Every external download is integrity-pinned and every URL is overridable. The three-pattern recipe (restricted egress / full air-gap with internal Nexus / BYO SDK via `groovy.local_toolchain`) lives in [`docs/airgapped.md`](docs/airgapped.md).
+Every external download is integrity-pinned and every URL is overridable. The three-pattern recipe (restricted egress / full air-gap with internal Nexus / BYO SDK via `groovy.local_toolchain`) lives in [`docs/airgapped.md`](docs/airgapped.md). [`examples/local_toolchain/`](examples/local_toolchain/) is the runnable demo of the BYO-SDK shape.
 
 ## Reference
 

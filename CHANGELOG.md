@@ -20,6 +20,15 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ### Added
 
+- `examples/local_toolchain/` — the runnable demo of
+  `groovy.local_toolchain`, the BYO-Groovy-SDK path. Pinned to
+  Groovy 4.0.32 at `/opt/groovy-4.0.32` in CI (the workflow
+  pre-installs the SDK there before the cell runs). Closes the
+  ISSUE-045 acceptance gap: tag class, `_local_spec` helper, and
+  `_groovy_local_sdk_repository_impl` were all in place; the
+  example proves end-to-end resolution + lib_jar existence check +
+  symlink layout match.
+
 - Two downstream-consumer demos that close the acceptance gap on
   ISSUE-044 (`groovy.toolchain` override surface):
     * `examples/override_url/` — registry-known version with a

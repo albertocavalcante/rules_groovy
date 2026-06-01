@@ -1,0 +1,4 @@
+# Use a remote JDK so the build doesn't depend on a host-side JDK
+# install. Mirrors the root `.bazelrc` setting that the parent module
+# uses for its own tests.
+build --java_runtime_version=remotejdk_11
