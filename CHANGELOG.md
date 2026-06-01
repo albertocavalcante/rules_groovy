@@ -4,7 +4,48 @@ This is a fork of [bazelbuild/rules_groovy](https://github.com/bazelbuild/rules_
 
 Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [semver](https://semver.org/); four-component versions (e.g. `0.1.0.1`) are reserved for the rare case where a patch-set diverges from a registry pin while reusing the upstream tag.
 
-## [Unreleased]
+## [0.1.0] — 2026-06-01
+
+### Architecture — pure language ruleset (BREAKING)
+
+The v0.1 surface is honest: `rules_groovy` ships only the Groovy SDK
+and the build rules that consume it. Maven resolution, test framework
+selection, and transitive lockfiling are user concerns, resolved by
+`rules_jvm_external`'s `maven.install`. The shape matches `rules_kotlin`
+/ `contrib_rules_jvm`.
+
+Three sequenced PRs landed the architecture:
+
+- **#40 (δ1)** — `runner_class` becomes an attr on the test rule; the
+  convenience macros hardcode the FQCN per framework
+  (`groovy_junit_test` → `JUnitCore`; `groovy_junit5_test` and
+  `spock_test` → `ConsoleLauncher`). Behavior preserved via a toolchain
+  fallback during transition.
+- **#41 (δ2)** — `examples/junit5_external/` shows the destination
+  pattern in tree: `rules_jvm_external` `maven.install` resolves
+  Jupiter API + Engine + Platform Console, labels pass through `deps`.
+- **#42 (δ3, breaking)** — the rip. Deleted: `groovy.testing` tag
+  class; `GroovyDepsInfo` provider; `groovy_deps` rule; `dep_providers`
+  and `runner_class` attrs on `groovy_toolchain`; `@groovy_artifacts`
+  hub repo and its BUILD template; `JUNIT4` / `JUNIT5` /
+  `SPOCK_FOR_GROOVY` constants in `versions.bzl`;
+  `_toolchain_dep_provider_jars` / `toolchain_deps_by_name` helpers;
+  `examples/testing_maven_repo/`. `runner_class` is mandatory on
+  `_groovy_test` / `groovy_test`. `compile_groovy` +
+  `test_runtime_classpath` stop folding toolchain framework jars onto
+  their respective classpaths — everything comes from `deps`.
+
+Examples migrated to `maven.install` with committed
+`maven_install.json` lockfiles (strictly more hermetic than the prior
+Starlark-pinned `http_jar` set): `junit4_test`, `junit5_test`,
+`mixed_jvm`, `stdlib_only_test`, `multi_version`, `spock_test`,
+`maven_dep`.
+
+Migration for downstream consumers: drop `groovy.testing(...)` from
+`MODULE.bazel`; add `bazel_dep(name = "rules_jvm_external", ...)` +
+`maven.install(artifacts = [...])`; pass `@maven//:...` labels through
+`groovy_junit5_test(deps = ...)` / `spock_test(deps = ...)`. See
+`examples/junit5_external/` for the minimal shape.
 
 ### Documentation
 
@@ -28,12 +69,9 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
   deploy-jar manifest determinism). README's `## Hermeticity`
   section links to it.
 
-- `examples/testing_maven_repo/` — the runnable demo of
-  `groovy.testing(maven_repo = ...)`, the override for the
-  test-runtime artifact base URL (JUnit, Spock, Hamcrest,
-  opentest4j, apiguardian, JUnit-5 platform). Uses the same URL as
-  the default so CI runs end-to-end; the README captures the
-  corporate-mirror substitution pattern.
+- `examples/junit5_external/` — canonical JUnit 5 wiring via
+  `rules_jvm_external` `maven.install` + explicit `@maven//:...`
+  labels in `deps`. The destination pattern after the δ3 rip. (#41)
 
 - `examples/local_toolchain/` — the runnable demo of
   `groovy.local_toolchain`, the BYO-Groovy-SDK path. Pinned to
@@ -392,67 +430,15 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
   README-only patterns are folded into the relevant new examples'
   documentation. (#20)
 
-## [0.1.0] — target
-
-### Added
-
-- Module extension API: `groovy.toolchain`, `groovy.local_toolchain`,
-  `groovy.testing` tag classes (#11).
-- Multi-version Groovy SDK coexistence; registry of pinned integrity
-  hashes in `groovy/private/versions.bzl` (#8, #11).
-- Optional `rules_jvm_external` interop via `groovy.testing(*_label = ...)`
-  opt-in attributes (#11).
-- Real Bazel toolchains: `GroovyToolchainInfo`, `GroovyDepsInfo`,
-  `groovy_toolchain`, `groovy_deps` (#9).
-- Hermetic compile and test-launcher actions; param files always;
-  `singlejar` packaging with directory entries (#10).
-- Stardoc-generated rule documentation under `docs/` with a CI
-  regen-check (#14).
-
-### Changed
-
-- Default Groovy bumped from 2.5.8 to 4.0.32 (#12). Pin 2.5.x or 3.0.x
-  explicitly via `groovy.toolchain(version = "2.5.23")` or similar.
-- Bazel 9.x is the supported baseline; Bazel 7/8 cells are advisory
-  only (#7).
-- `rules_java` pinned to 9.6.1 (#7).
-- All public rules now declare
-  `toolchains = ["//groovy:toolchain_type", JDK runtime, Java
-  toolchain]` (#9, #10).
-
-### Removed
-
-- `WORKSPACE`, `groovy/repositories.bzl`, `groovy/toolchains.bzl` (#13).
-- `native.bind()` calls (#13).
-- `cfg = "host"` on all attributes (#10).
-- `@bazel_tools//tools/zip:zipper` references in favor of `singlejar`
-  from `rules_java` (#10).
-- Direct `@bazel_tools//tools/jdk:current_java_runtime` references in
-  favor of toolchain resolution (#10).
-
-### Fixed
-
-- `path_to_class` now slices on the source's actual extension instead
-  of always assuming `.groovy`, so `groovy_junit_test` with `.java`
-  helper sources works (#10).
-- Replaced legacy `struct(runfiles = ...)` rule return with
-  `DefaultInfo(runfiles = ...)` (#10).
-- Directory entries are now emitted in output jars, fixing
-  [upstream #52](https://github.com/bazelbuild/rules_groovy/issues/52)
-  and [#61](https://github.com/bazelbuild/rules_groovy/issues/61)
-  (#10).
-- Long-classpath builds work via param files, fixing
-  [upstream #64](https://github.com/bazelbuild/rules_groovy/issues/64)
-  (#10).
-
 ### Compatibility
 
 - Bazel minimum: 9.0.
 - Bzlmod only — `WORKSPACE` is no longer supported.
-- The fork preserves macro signatures (`groovy_library`, `groovy_binary`,
-  `groovy_test`, `groovy_and_java_library`, `groovy_junit_test`,
-  `spock_test`) for source-level compatibility with upstream
-  `bazelbuild/rules_groovy 0.0.6` BUILD files.
+- Public macro names (`groovy_library`, `groovy_binary`, `groovy_test`,
+  `groovy_junit_test`, `groovy_junit5_test`, `spock_test`) are
+  source-level compatible with upstream `bazelbuild/rules_groovy 0.0.6`
+  BUILD files. The `groovy.testing(...)` MODULE.bazel surface is
+  removed; downstream modules wire JUnit / Spock via
+  `rules_jvm_external` per the migration note above.
 
-[Unreleased]: https://github.com/albertocavalcante/rules_groovy/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/albertocavalcante/rules_groovy/releases/tag/v0.1.0
