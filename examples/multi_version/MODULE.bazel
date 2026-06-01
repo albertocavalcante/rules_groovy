@@ -1,4 +1,7 @@
-module(name = "rules_groovy_example_multi_version", version = "0.0.0")
+module(
+    name = "rules_groovy_example_multi_version",
+    version = "0.0.0",
+)
 
 bazel_dep(name = "rules_groovy", version = "0.0.0")
 local_path_override(
@@ -29,11 +32,11 @@ groovy.toolchain(
     name = "groovy4",
     version = "4.0.32",
 )
-
 use_repo(
     groovy,
     "groovy_toolchains",
 )
+
 register_toolchains("@groovy_toolchains//:all")
 
 # JUnit 4 is chosen over JUnit 5 because each Groovy SDK distribution

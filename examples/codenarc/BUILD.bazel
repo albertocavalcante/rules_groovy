@@ -39,12 +39,12 @@ java_binary(
 sh_test(
     name = "codenarc",
     srcs = ["codenarc.sh"],
-    data = [
-        ":codenarc_cli",
-        "codenarc.groovy",
-    ] + glob(["src/main/groovy/**/*.groovy"]),
     args = [
         "$(rootpath :codenarc_cli)",
         "$(rootpath codenarc.groovy)",
     ],
+    data = [
+        "codenarc.groovy",
+        ":codenarc_cli",
+    ] + glob(["src/main/groovy/**/*.groovy"]),
 )

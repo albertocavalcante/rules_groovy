@@ -13,7 +13,7 @@ spock_test(
     specs = ["src/test/groovy/calc/CalcSpec.groovy"],
     deps = [
         ":calc",
-        "@maven//:org_spockframework_spock_core",
         "@maven//:org_junit_platform_junit_platform_console",
+        "@maven//:org_spockframework_spock_core",
     ],
 )

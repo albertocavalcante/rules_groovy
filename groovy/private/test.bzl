@@ -27,7 +27,6 @@ etc.) are user concerns; pass them via `deps`, typically resolved by
 load("@rules_java//java:defs.bzl", "JavaInfo", "java_library")
 load(
     "//groovy/private:actions.bzl",
-    "GROOVY_TOOLCHAIN_TYPE",
     "JUNIT4_CORE",
     "JUNIT5_CONSOLE_LAUNCHER",
     "REQUIRED_TOOLCHAINS",
