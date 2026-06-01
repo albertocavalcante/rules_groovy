@@ -1,0 +1,22 @@
+load("@rules_groovy//groovy:defs.bzl", "groovy_junit5_test", "groovy_library")
+
+groovy_library(
+    name = "lib",
+    srcs = ["src/main/groovy/lib/Greeter.groovy"],
+)
+
+# Test framework jars come from the `maven.install` in MODULE.bazel,
+# referenced as `@maven//:<sanitized-coord>` labels in `deps`. The
+# `groovy_junit5_test` macro hard-pins the JUnit 5 ConsoleLauncher as
+# the runner; the deps just need to put Jupiter API, Jupiter Engine,
+# and Platform Console on the test classpath.
+groovy_junit5_test(
+    name = "GreeterTest",
+    tests = ["src/test/groovy/lib/GreeterTest.groovy"],
+    deps = [
+        ":lib",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+        "@maven//:org_junit_jupiter_junit_jupiter_engine",
+        "@maven//:org_junit_platform_junit_platform_console",
+    ],
+)

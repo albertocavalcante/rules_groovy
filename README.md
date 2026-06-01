@@ -77,6 +77,7 @@ Each subdir is a self-contained Bazel module that consumes `rules_groovy` via `l
 | [`long_classpath`](examples/long_classpath/) | param-file classpath under Linux `ARG_MAX` |
 | [`local_toolchain`](examples/local_toolchain/) | BYO Groovy SDK from an on-disk path (no download) |
 | [`testing_maven_repo`](examples/testing_maven_repo/) | corporate-mirror Maven base URL for test artifacts |
+| [`junit5_external`](examples/junit5_external/) | recommended: JUnit 5 via `rules_jvm_external` `maven.install` |
 
 ## Air-gapped or offline environments
 
