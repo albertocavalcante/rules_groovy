@@ -222,6 +222,8 @@ jobs:
           - codenarc
           - reproducibility
           - long_classpath
+          - override_url
+          - custom_version
     steps:
       - name: Checkout
         uses: actions/checkout@v4

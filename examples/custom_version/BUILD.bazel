@@ -1,0 +1,13 @@
+load("@rules_groovy//groovy:defs.bzl", "groovy_library")
+
+# Proves that a `groovy.toolchain` tag for a version NOT in the
+# registry resolves end-to-end when all four download fields are
+# supplied. If any of `urls`, `integrity`, `strip_prefix`, or
+# `lib_jar` were omitted, extension resolution would `fail()` with
+# the "Groovy 4.0.24 not in registry. Pin all of urls, integrity,
+# strip_prefix, lib_jar..." error.
+groovy_library(
+    name = "greeter",
+    srcs = ["src/main/groovy/greeter/Greeter.groovy"],
+    visibility = ["//visibility:public"],
+)
