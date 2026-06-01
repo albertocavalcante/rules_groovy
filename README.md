@@ -53,7 +53,7 @@ For corporate mirrors or unregistered versions, `groovy.toolchain` accepts `urls
 
 By design: every compile and packaging action runs with an explicit environment. No host `$PATH` leak, no host `$JAVA_HOME`, no `which groovyc` fallback. The JDK comes from Bazel's standard `java_runtime_toolchain_type`; the Groovy SDK is integrity-pinned; `singlejar` packaging uses `--add_missing_directories` for `java_library` parity. Every download URL is overridable from `MODULE.bazel`.
 
-[`examples/reproducibility/`](examples/reproducibility/) hashes the output jar of a one-class library and asserts byte-equality across builds. The `hermeticity_test` analysistest in [`tests/hermeticity_test.bzl`](tests/hermeticity_test.bzl) checks the `Groovyc` action's env list for host-env leaks.
+The audited claim — explicit list of what hermeticity means here and per-action evidence for it — lives at [`docs/hermeticity.md`](docs/hermeticity.md). [`examples/reproducibility/`](examples/reproducibility/) hashes the output jar of a one-class library and asserts byte-equality across builds; [`tests/hermeticity_test.bzl`](tests/hermeticity_test.bzl) checks the `Groovyc` action's env list for host-env leaks.
 
 ## Examples
 
@@ -76,6 +76,7 @@ Each subdir is a self-contained Bazel module that consumes `rules_groovy` via `l
 | [`reproducibility`](examples/reproducibility/) | byte-reproducible output jars |
 | [`long_classpath`](examples/long_classpath/) | param-file classpath under Linux `ARG_MAX` |
 | [`local_toolchain`](examples/local_toolchain/) | BYO Groovy SDK from an on-disk path (no download) |
+| [`testing_maven_repo`](examples/testing_maven_repo/) | corporate-mirror Maven base URL for test artifacts |
 
 ## Air-gapped or offline environments
 

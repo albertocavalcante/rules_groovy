@@ -225,6 +225,7 @@ jobs:
           - override_url
           - custom_version
           - local_toolchain
+          - testing_maven_repo
     steps:
       - name: Checkout
         uses: actions/checkout@v4

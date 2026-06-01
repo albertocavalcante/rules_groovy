@@ -1,0 +1,19 @@
+load("@rules_groovy//groovy:defs.bzl", "groovy_junit5_test", "groovy_library")
+
+# Library compiled against the resolved Groovy SDK + the JUnit 5 +
+# Spock artifact set the `groovy.testing(maven_repo = ...)` override
+# wired in MODULE.bazel.
+groovy_library(
+    name = "lib",
+    srcs = ["src/main/groovy/lib/Greeter.groovy"],
+)
+
+# JUnit 5 test exercising the library. Proves the test-runtime
+# artifacts (`junit-jupiter-api`, `junit-jupiter-engine`,
+# `junit-platform-console`, `opentest4j`, `apiguardian-api`) all
+# fetched successfully from the `maven_repo`-overridden base URL.
+groovy_junit5_test(
+    name = "GreeterTest",
+    tests = ["src/test/groovy/lib/GreeterTest.groovy"],
+    deps = [":lib"],
+)

@@ -20,6 +20,21 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ### Added
 
+- `docs/hermeticity.md` — the audited claim. Explicit list of what
+  hermeticity means in `rules_groovy`, per-action evidence
+  (compile / package / launcher / test runner / SDK repo rules),
+  what hermeticity does NOT cover, and the gaps queued as v0.2
+  follow-ups (sandbox-mode robustness, PATH-stripped action env,
+  deploy-jar manifest determinism). README's `## Hermeticity`
+  section links to it.
+
+- `examples/testing_maven_repo/` — the runnable demo of
+  `groovy.testing(maven_repo = ...)`, the override for the
+  test-runtime artifact base URL (JUnit, Spock, Hamcrest,
+  opentest4j, apiguardian, JUnit-5 platform). Uses the same URL as
+  the default so CI runs end-to-end; the README captures the
+  corporate-mirror substitution pattern.
+
 - `examples/local_toolchain/` — the runnable demo of
   `groovy.local_toolchain`, the BYO-Groovy-SDK path. Pinned to
   Groovy 4.0.32 at `/opt/groovy-4.0.32` in CI (the workflow
