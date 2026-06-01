@@ -26,6 +26,8 @@ load("@rules_java//java:defs.bzl", "JavaInfo", "java_library")
 load(
     "//groovy/private:actions.bzl",
     "GROOVY_TOOLCHAIN_TYPE",
+    "JUNIT4_CORE",
+    "JUNIT5_CONSOLE_LAUNCHER",
     "REQUIRED_TOOLCHAINS",
     "test_runtime_classpath",
     "write_test_launcher",
@@ -97,9 +99,11 @@ def _groovy_test_impl(ctx):
     classpath = test_runtime_classpath(ctx, ctx.attr.deps)
     classes = [path_to_class(src.path, ctx.attr.src_roots) for src in ctx.files.srcs]
 
-    # The runner main class is sourced from the toolchain so the module
-    # extension owns the JUnit 4 / JUnit 5 selection.
-    runner_class = ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].groovy_info.runner_class
+    # Explicit `runner_class` attr wins; empty falls back to the toolchain
+    # (legacy path until the testing extension is removed).
+    runner_class = ctx.attr.runner_class
+    if not runner_class:
+        runner_class = ctx.toolchains[GROOVY_TOOLCHAIN_TYPE].groovy_info.runner_class
 
     write_test_launcher(
         ctx = ctx,
@@ -131,6 +135,15 @@ _groovy_test = rule(
         "data": attr.label_list(allow_files = True),
         "jvm_flags": attr.string_list(),
         "deps": attr.label_list(allow_files = [".jar"]),
+        "runner_class": attr.string(
+            default = "",
+            doc = "FQCN of the JVM main class the launcher exec's. Empty " +
+                  "falls back to the active toolchain's `runner_class`. " +
+                  "Convenience macros set this per framework " +
+                  "(`org.junit.runner.JUnitCore` for `groovy_junit_test`; " +
+                  "`org.junit.platform.console.ConsoleLauncher` for " +
+                  "`groovy_junit5_test` and `spock_test`).",
+        ),
         "src_roots": attr.string_list(
             default = _DEFAULT_SRC_ROOTS,
             doc = "Source-root prefixes to strip from test source paths when " +
@@ -162,6 +175,7 @@ def _groovy_test_macro_impl(
         size,
         tags,
         src_roots,
+        runner_class,
         **kwargs):
     # Resources: v0.1 keeps the legacy side `java_library(resources = ...)`
     # target. When `resources` is empty no `java_library` target is created.
@@ -184,6 +198,7 @@ def _groovy_test_macro_impl(
         data = data,
         jvm_flags = jvm_flags,
         src_roots = src_roots,
+        runner_class = runner_class,
         **kwargs
     )
 
@@ -225,6 +240,13 @@ groovy_test = macro(
             doc = "Source-root prefixes used to derive each test's FQCN. " +
                   "Defaults to `[\"src/test/groovy\", \"src/test/java\"]`. " +
                   "Longest matching root wins.",
+        ),
+        "runner_class": attr.string(
+            default = "",
+            doc = "FQCN of the JVM main class the launcher exec's. Empty " +
+                  "falls back to the active toolchain's `runner_class`. " +
+                  "Set explicitly to pin a runner per test (e.g. `\"" +
+                  JUNIT5_CONSOLE_LAUNCHER + "\"`).",
         ),
     },
     doc = """Runs Groovy tests under the toolchain-selected JUnit runner.
@@ -295,6 +317,7 @@ def _groovy_junit_test_impl(
         size = size,
         tags = tags,
         src_roots = src_roots,
+        runner_class = JUNIT4_CORE,
         **kwargs
     )
 
@@ -384,6 +407,7 @@ def _groovy_junit5_test_impl(
         size = size,
         tags = tags,
         src_roots = src_roots,
+        runner_class = JUNIT5_CONSOLE_LAUNCHER,
         **kwargs
     )
 
@@ -480,6 +504,7 @@ def _spock_test_impl(
         size = size,
         tags = tags,
         src_roots = src_roots,
+        runner_class = JUNIT5_CONSOLE_LAUNCHER,
         **kwargs
     )
 

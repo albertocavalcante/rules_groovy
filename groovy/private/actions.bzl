@@ -289,9 +289,11 @@ def test_runtime_classpath(ctx, deps):
         transitive = [groovy_info.sdk_files, _deps_classpath(deps)] + toolchain_dep_jars,
     )
 
-# FQCN of JUnit 5's `ConsoleLauncher`. Compared against the toolchain's
-# `runner_class` to pick the right test-launcher invocation shape. JUnit 4's
-# `JUnitCore` is the implicit "everything else" branch.
+# Runner main-class FQCNs the convenience macros hardcode per framework.
+# `_runner_args` branches on the launcher value to pick the right
+# invocation shape (positional FQCNs for JUnitCore; `--select-class` per
+# spec for ConsoleLauncher).
+JUNIT4_CORE = "org.junit.runner.JUnitCore"
 JUNIT5_CONSOLE_LAUNCHER = "org.junit.platform.console.ConsoleLauncher"
 
 def _runner_args(runner_class, classes):
