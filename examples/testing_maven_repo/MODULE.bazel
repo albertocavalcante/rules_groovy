@@ -1,0 +1,29 @@
+module(name = "rules_groovy_example_testing_maven_repo", version = "0.0.0")
+
+bazel_dep(name = "rules_groovy", version = "0.0.0")
+local_path_override(
+    module_name = "rules_groovy",
+    path = "../..",
+)
+
+groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
+
+# Swap the Maven base URL for the test-runtime fetch path. The default
+# is `https://repo1.maven.org/maven2`; here we point at the exact same
+# URL explicitly to prove the override mechanism. In a corporate setup
+# this would be your internal Artifactory / Nexus mirror, e.g.
+# `https://artifactory.corp.example.com/maven-central`.
+#
+# `maven_repo` overrides only the BASE URL — JUnit, Spock, Hamcrest,
+# opentest4j, apiguardian, and the JUnit-5 platform set all get fetched
+# from the same base. To override individual artifacts as labels
+# (e.g. resolved by `rules_jvm_external`), see `*_label` attrs on
+# `groovy.testing`.
+groovy.testing(
+    junit = "5",
+    spock = True,
+    maven_repo = "https://repo1.maven.org/maven2",
+)
+
+use_repo(groovy, "groovy_toolchains")
+register_toolchains("@groovy_toolchains//:all")
