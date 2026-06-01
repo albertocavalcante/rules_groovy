@@ -4,21 +4,26 @@ module(
 )
 
 bazel_dep(name = "rules_groovy", version = "0.0.0")
-bazel_dep(name = "rules_jvm_external", version = "6.5")
+bazel_dep(name = "rules_jvm_external", version = "7.0")
 
 local_path_override(
     module_name = "rules_groovy",
     path = "../..",
 )
 
-# Resolve the Guava artifact via rules_jvm_external; rules_groovy itself
-# does not depend on rules_jvm_external (see notes/maven-decoupling.md).
+# Demonstrates both a production dep (Guava) and JUnit 5 test deps
+# resolved through the same maven hub.
 maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
 maven.install(
     name = "maven",
     artifacts = [
         "com.google.guava:guava:33.4.0-jre",
+        "org.junit.jupiter:junit-jupiter-api:5.11.0",
+        "org.junit.jupiter:junit-jupiter-engine:5.11.0",
+        "org.junit.platform:junit-platform-console:1.11.0",
     ],
+    lock_file = "//:maven_install.json",
+    repositories = ["https://repo1.maven.org/maven2"],
 )
 use_repo(maven, "maven")
 
