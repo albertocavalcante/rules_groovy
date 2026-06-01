@@ -6,6 +6,18 @@ Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Documentation
+
+- README rewritten for the git_override-consumer path. Installation
+  block pins a real commit SHA (replacing the
+  `"<pin a specific commit hash>"` placeholder), the
+  hermetic-by-construction claim moves up into a dedicated section,
+  and the Examples table indexes every `examples/` subdir with a
+  one-line description. Net trim ~55% (237 → 105 lines) while
+  preserving the substantive content: deeper material (fork
+  rationale, air-gap recipes, full rule reference) lives under
+  later headers + sibling docs.
+
 ### Added
 
 - Two downstream-consumer demos that close the acceptance gap on
