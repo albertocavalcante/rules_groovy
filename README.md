@@ -13,7 +13,8 @@ bazel_dep(name = "rules_groovy", version = "0.1.0")
 git_override(
     module_name = "rules_groovy",
     remote = "https://github.com/albertocavalcante/rules_groovy.git",
-    commit = "93f0753ce838b3b862b017e30ce153b1e58a3366",
+    # tag = "v0.1.0",  # tags are mutable; pin by commit for supply-chain safety
+    commit = "5e81edb6cfa1cef01f6b11477c0aca64535702ff",
 )
 
 groovy = use_extension("@rules_groovy//groovy:extensions.bzl", "groovy")
