@@ -1,5 +1,6 @@
 load("@rules_java//java:defs.bzl", "java_binary", "java_library")
-load("//groovy:defs.bzl", "groovy_library", "groovy_toolchain")
+load("//groovy:defs.bzl", "groovy_library", "groovy_test", "groovy_toolchain")
+load(":groovy_test_test.bzl", "test_classes_override_test")
 load(":hermeticity_test.bzl", "hermeticity_test")
 load(
     ":path_to_class_test.bzl",
@@ -8,6 +9,11 @@ load(
     "longest_prefix_wins_test",
     "no_match_failure_test",
     "no_match_rule",
+    "subpackage_custom_package_relative_root_test",
+    "subpackage_default_roots_test",
+    "subpackage_explicit_workspace_root_test",
+    "subpackage_no_match_failure_test",
+    "subpackage_no_match_rule",
 )
 load(":toolchain_test.bzl", "toolchain_round_trip_test")
 
@@ -74,6 +80,12 @@ custom_root_test(name = "path_to_class_custom_root_test")
 
 longest_prefix_wins_test(name = "path_to_class_longest_prefix_wins_test")
 
+subpackage_default_roots_test(name = "path_to_class_subpackage_default_roots_test")
+
+subpackage_explicit_workspace_root_test(name = "path_to_class_subpackage_explicit_workspace_root_test")
+
+subpackage_custom_package_relative_root_test(name = "path_to_class_subpackage_custom_package_relative_root_test")
+
 # Fixture for the no-match analysistest: `path_to_class` fails during
 # analysis when given a path that no configured root matches.
 no_match_rule(
@@ -86,6 +98,16 @@ no_match_failure_test(
     target_under_test = ":path_to_class_no_match_fixture",
 )
 
+subpackage_no_match_rule(
+    name = "path_to_class_subpackage_no_match_fixture",
+    tags = ["manual"],
+)
+
+subpackage_no_match_failure_test(
+    name = "path_to_class_subpackage_no_match_failure_test",
+    target_under_test = ":path_to_class_subpackage_no_match_fixture",
+)
+
 test_suite(
     name = "all_path_to_class_tests",
     tests = [
@@ -93,6 +115,33 @@ test_suite(
         ":path_to_class_default_roots_test",
         ":path_to_class_longest_prefix_wins_test",
         ":path_to_class_no_match_failure_test",
+        ":path_to_class_subpackage_custom_package_relative_root_test",
+        ":path_to_class_subpackage_default_roots_test",
+        ":path_to_class_subpackage_explicit_workspace_root_test",
+        ":path_to_class_subpackage_no_match_failure_test",
+    ],
+)
+
+# groovy_test behavior coverage ------------------------------------------------
+
+groovy_test(
+    name = "test_classes_override_fixture",
+    srcs = ["HermeticityFixture.groovy"],
+    runner_class = "tests.FakeJunit",
+    tags = ["manual"],
+    test_classes = ["manual.OverrideSpec"],
+    deps = [":fake_junit"],
+)
+
+test_classes_override_test(
+    name = "groovy_test_test_classes_override_test",
+    target_under_test = ":test_classes_override_fixture",
+)
+
+test_suite(
+    name = "all_groovy_test_tests",
+    tests = [
+        ":groovy_test_test_classes_override_test",
     ],
 )
 

@@ -134,7 +134,7 @@ Resolved Groovy SDK + runtime info for a single toolchain instance.
 <pre>
 load("@rules_groovy//groovy:defs.bzl", "path_to_class")
 
-path_to_class(<a href="#path_to_class-path">path</a>, <a href="#path_to_class-src_roots">src_roots</a>)
+path_to_class(<a href="#path_to_class-path">path</a>, <a href="#path_to_class-src_roots">src_roots</a>, <a href="#path_to_class-package_name">package_name</a>)
 </pre>
 
 Convert a test source path to a Java/Groovy fully-qualified class name.
@@ -150,9 +150,14 @@ With the default `src_roots`:
                                                           is legal — groovyc
                                                           accepts mixed sources)
 
-Custom roots — e.g. `src_roots = ["example/foo/src/test/groovy"]` —
-work the same way; the longest matching root wins so nested layouts
-behave sensibly.
+In package-local BUILD files, roots are also tried relative to
+`package_name`. For example, with `package_name = "example/foo"`, the
+default `src_roots` match
+`example/foo/src/test/groovy/<pkg>/<Cls>.groovy`.
+
+Custom workspace-relative roots — e.g.
+`src_roots = ["example/foo/src/test/groovy"]` — continue to work the same
+way. The longest matching root wins so nested layouts behave sensibly.
 
 Fails loudly when no root matches, or when the source's extension is
 not `.groovy` / `.java`.
@@ -165,6 +170,7 @@ not `.groovy` / `.java`.
 | :------------- | :------------- | :------------- |
 | <a id="path_to_class-path"></a>path |  Workspace-relative path to a test source file.   |  none |
 | <a id="path_to_class-src_roots"></a>src_roots |  Source-root prefixes to try, longest first. Defaults to `["src/test/groovy", "src/test/java"]`.   |  `["src/test/groovy", "src/test/java"]` |
+| <a id="path_to_class-package_name"></a>package_name |  Bazel package name for package-local root normalization.   |  `""` |
 
 **RETURNS**
 
@@ -310,7 +316,8 @@ load("@rules_groovy//groovy:defs.bzl", "groovy_junit5_test")
 groovy_junit5_test(*, <a href="#groovy_junit5_test-name">name</a>, <a href="#groovy_junit5_test-deps">deps</a>, <a href="#groovy_junit5_test-data">data</a>, <a href="#groovy_junit5_test-resources">resources</a>, <a href="#groovy_junit5_test-aspect_hints">aspect_hints</a>, <a href="#groovy_junit5_test-compatible_with">compatible_with</a>, <a href="#groovy_junit5_test-deprecation">deprecation</a>,
                    <a href="#groovy_junit5_test-exec_compatible_with">exec_compatible_with</a>, <a href="#groovy_junit5_test-exec_group_compatible_with">exec_group_compatible_with</a>, <a href="#groovy_junit5_test-exec_properties">exec_properties</a>, <a href="#groovy_junit5_test-features">features</a>,
                    <a href="#groovy_junit5_test-groovy_srcs">groovy_srcs</a>, <a href="#groovy_junit5_test-java_srcs">java_srcs</a>, <a href="#groovy_junit5_test-jvm_flags">jvm_flags</a>, <a href="#groovy_junit5_test-package_metadata">package_metadata</a>, <a href="#groovy_junit5_test-restricted_to">restricted_to</a>, <a href="#groovy_junit5_test-size">size</a>,
-                   <a href="#groovy_junit5_test-src_roots">src_roots</a>, <a href="#groovy_junit5_test-tags">tags</a>, <a href="#groovy_junit5_test-target_compatible_with">target_compatible_with</a>, <a href="#groovy_junit5_test-testonly">testonly</a>, <a href="#groovy_junit5_test-tests">tests</a>, <a href="#groovy_junit5_test-toolchains">toolchains</a>, <a href="#groovy_junit5_test-visibility">visibility</a>)
+                   <a href="#groovy_junit5_test-src_roots">src_roots</a>, <a href="#groovy_junit5_test-tags">tags</a>, <a href="#groovy_junit5_test-target_compatible_with">target_compatible_with</a>, <a href="#groovy_junit5_test-test_classes">test_classes</a>, <a href="#groovy_junit5_test-testonly">testonly</a>, <a href="#groovy_junit5_test-tests">tests</a>, <a href="#groovy_junit5_test-toolchains">toolchains</a>,
+                   <a href="#groovy_junit5_test-visibility">visibility</a>)
 </pre>
 
 Convenience macro for JUnit 5 (Jupiter)-driven Groovy tests.
@@ -350,6 +357,7 @@ visibility — callers do not reach into it directly.
 | <a id="groovy_junit5_test-src_roots"></a>src_roots |  -   | List of strings | optional |  `["src/test/groovy", "src/test/java"]`  |
 | <a id="groovy_junit5_test-tags"></a>tags |  <a href="https://bazel.build/reference/be/common-definitions#common.tags">Inherited rule attribute</a>   | List of strings; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
 | <a id="groovy_junit5_test-target_compatible_with"></a>target_compatible_with |  <a href="https://bazel.build/reference/be/common-definitions#common.target_compatible_with">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `None`  |
+| <a id="groovy_junit5_test-test_classes"></a>test_classes |  Explicit test class FQCNs. When set, bypasses source-path inference for the files in `tests`.   | List of strings | optional |  `[]`  |
 | <a id="groovy_junit5_test-testonly"></a>testonly |  <a href="https://bazel.build/reference/be/common-definitions#common.testonly">Inherited rule attribute</a>   | Boolean; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
 | <a id="groovy_junit5_test-tests"></a>tests |  `.groovy` files that define JUnit 5 (Jupiter) test classes.   | <a href="https://bazel.build/concepts/labels">List of labels</a>; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `[]`  |
 | <a id="groovy_junit5_test-toolchains"></a>toolchains |  <a href="https://bazel.build/reference/be/common-definitions#common.toolchains">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `None`  |
@@ -366,7 +374,7 @@ load("@rules_groovy//groovy:defs.bzl", "groovy_junit_test")
 groovy_junit_test(*, <a href="#groovy_junit_test-name">name</a>, <a href="#groovy_junit_test-deps">deps</a>, <a href="#groovy_junit_test-data">data</a>, <a href="#groovy_junit_test-resources">resources</a>, <a href="#groovy_junit_test-aspect_hints">aspect_hints</a>, <a href="#groovy_junit_test-compatible_with">compatible_with</a>, <a href="#groovy_junit_test-deprecation">deprecation</a>,
                   <a href="#groovy_junit_test-exec_compatible_with">exec_compatible_with</a>, <a href="#groovy_junit_test-exec_group_compatible_with">exec_group_compatible_with</a>, <a href="#groovy_junit_test-exec_properties">exec_properties</a>, <a href="#groovy_junit_test-features">features</a>,
                   <a href="#groovy_junit_test-groovy_srcs">groovy_srcs</a>, <a href="#groovy_junit_test-java_srcs">java_srcs</a>, <a href="#groovy_junit_test-jvm_flags">jvm_flags</a>, <a href="#groovy_junit_test-package_metadata">package_metadata</a>, <a href="#groovy_junit_test-restricted_to">restricted_to</a>, <a href="#groovy_junit_test-size">size</a>, <a href="#groovy_junit_test-src_roots">src_roots</a>,
-                  <a href="#groovy_junit_test-tags">tags</a>, <a href="#groovy_junit_test-target_compatible_with">target_compatible_with</a>, <a href="#groovy_junit_test-testonly">testonly</a>, <a href="#groovy_junit_test-tests">tests</a>, <a href="#groovy_junit_test-toolchains">toolchains</a>, <a href="#groovy_junit_test-visibility">visibility</a>)
+                  <a href="#groovy_junit_test-tags">tags</a>, <a href="#groovy_junit_test-target_compatible_with">target_compatible_with</a>, <a href="#groovy_junit_test-test_classes">test_classes</a>, <a href="#groovy_junit_test-testonly">testonly</a>, <a href="#groovy_junit_test-tests">tests</a>, <a href="#groovy_junit_test-toolchains">toolchains</a>, <a href="#groovy_junit_test-visibility">visibility</a>)
 </pre>
 
 Convenience macro for JUnit-4-driven Groovy tests with helper sources.
@@ -406,6 +414,7 @@ visibility — callers do not reach into it directly.
 | <a id="groovy_junit_test-src_roots"></a>src_roots |  -   | List of strings | optional |  `["src/test/groovy", "src/test/java"]`  |
 | <a id="groovy_junit_test-tags"></a>tags |  <a href="https://bazel.build/reference/be/common-definitions#common.tags">Inherited rule attribute</a>   | List of strings; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
 | <a id="groovy_junit_test-target_compatible_with"></a>target_compatible_with |  <a href="https://bazel.build/reference/be/common-definitions#common.target_compatible_with">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `None`  |
+| <a id="groovy_junit_test-test_classes"></a>test_classes |  Explicit test class FQCNs. When set, bypasses source-path inference for the files in `tests`.   | List of strings | optional |  `[]`  |
 | <a id="groovy_junit_test-testonly"></a>testonly |  <a href="https://bazel.build/reference/be/common-definitions#common.testonly">Inherited rule attribute</a>   | Boolean; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
 | <a id="groovy_junit_test-tests"></a>tests |  `.groovy` / `.java` files that define JUnit test classes (the runnable specs).   | <a href="https://bazel.build/concepts/labels">List of labels</a>; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `[]`  |
 | <a id="groovy_junit_test-toolchains"></a>toolchains |  <a href="https://bazel.build/reference/be/common-definitions#common.toolchains">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `None`  |
@@ -422,7 +431,7 @@ load("@rules_groovy//groovy:defs.bzl", "groovy_test")
 groovy_test(*, <a href="#groovy_test-name">name</a>, <a href="#groovy_test-deps">deps</a>, <a href="#groovy_test-srcs">srcs</a>, <a href="#groovy_test-data">data</a>, <a href="#groovy_test-resources">resources</a>, <a href="#groovy_test-aspect_hints">aspect_hints</a>, <a href="#groovy_test-compatible_with">compatible_with</a>, <a href="#groovy_test-deprecation">deprecation</a>,
             <a href="#groovy_test-exec_compatible_with">exec_compatible_with</a>, <a href="#groovy_test-exec_group_compatible_with">exec_group_compatible_with</a>, <a href="#groovy_test-exec_properties">exec_properties</a>, <a href="#groovy_test-features">features</a>, <a href="#groovy_test-jvm_flags">jvm_flags</a>,
             <a href="#groovy_test-package_metadata">package_metadata</a>, <a href="#groovy_test-restricted_to">restricted_to</a>, <a href="#groovy_test-runner_class">runner_class</a>, <a href="#groovy_test-size">size</a>, <a href="#groovy_test-src_roots">src_roots</a>, <a href="#groovy_test-tags">tags</a>,
-            <a href="#groovy_test-target_compatible_with">target_compatible_with</a>, <a href="#groovy_test-testonly">testonly</a>, <a href="#groovy_test-toolchains">toolchains</a>, <a href="#groovy_test-visibility">visibility</a>)
+            <a href="#groovy_test-target_compatible_with">target_compatible_with</a>, <a href="#groovy_test-test_classes">test_classes</a>, <a href="#groovy_test-testonly">testonly</a>, <a href="#groovy_test-toolchains">toolchains</a>, <a href="#groovy_test-visibility">visibility</a>)
 </pre>
 
 Runs Groovy tests under an explicit JVM main class.
@@ -435,13 +444,18 @@ the `.groovy` / `.java` extension. Each derived class is passed to the
 `org.junit.platform.console.ConsoleLauncher`).
 
 The default `src_roots` matches Maven-style layouts at the workspace
-root (`src/test/groovy`, `src/test/java`). Override it to host tests
-under arbitrary directory trees — e.g. `["example/foo/src/test/groovy"]`
-— without rewriting the call sites.
+root (`src/test/groovy`, `src/test/java`) and package-local Maven-style
+layouts when the test target lives below a package directory. Override it to
+host tests under arbitrary directory trees — e.g. `["src/integration/groovy"]`
+from a package-local BUILD file or `["example/foo/src/test/groovy"]` from the
+workspace root — without rewriting the call sites.
 
 JUnit / Spock jars come in via `deps` — they are user concerns,
 typically resolved by `rules_jvm_external`'s `maven.install`. See
 `examples/junit5_external/` for the canonical wiring.
+
+Set `test_classes` when the class names should be selected explicitly instead
+of inferred from source paths.
 
 For convenience wrappers that hardcode the runner and split test
 sources into a side library, see `groovy_junit_test`,
@@ -472,6 +486,7 @@ sources into a side library, see `groovy_junit_test`,
 | <a id="groovy_test-src_roots"></a>src_roots |  Source-root prefixes used to derive each test's FQCN. Defaults to `["src/test/groovy", "src/test/java"]`. Longest matching root wins.   | List of strings | optional |  `["src/test/groovy", "src/test/java"]`  |
 | <a id="groovy_test-tags"></a>tags |  <a href="https://bazel.build/reference/be/common-definitions#common.tags">Inherited rule attribute</a>   | List of strings; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
 | <a id="groovy_test-target_compatible_with"></a>target_compatible_with |  <a href="https://bazel.build/reference/be/common-definitions#common.target_compatible_with">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `None`  |
+| <a id="groovy_test-test_classes"></a>test_classes |  Explicit test class FQCNs. When set, bypasses source-path inference from `srcs` / `src_roots`.   | List of strings | optional |  `[]`  |
 | <a id="groovy_test-testonly"></a>testonly |  <a href="https://bazel.build/reference/be/common-definitions#common.testonly">Inherited rule attribute</a>   | Boolean; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
 | <a id="groovy_test-toolchains"></a>toolchains |  <a href="https://bazel.build/reference/be/common-definitions#common.toolchains">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `None`  |
 | <a id="groovy_test-visibility"></a>visibility |  The visibility to be passed to this macro's exported targets. It always implicitly includes the location where this macro is instantiated, so this attribute only needs to be explicitly set if you want the macro's targets to be additionally visible somewhere else.   | <a href="https://bazel.build/concepts/labels">List of labels</a>; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  |
@@ -487,7 +502,7 @@ load("@rules_groovy//groovy:defs.bzl", "spock_test")
 spock_test(*, <a href="#spock_test-name">name</a>, <a href="#spock_test-deps">deps</a>, <a href="#spock_test-data">data</a>, <a href="#spock_test-resources">resources</a>, <a href="#spock_test-aspect_hints">aspect_hints</a>, <a href="#spock_test-compatible_with">compatible_with</a>, <a href="#spock_test-deprecation">deprecation</a>,
            <a href="#spock_test-exec_compatible_with">exec_compatible_with</a>, <a href="#spock_test-exec_group_compatible_with">exec_group_compatible_with</a>, <a href="#spock_test-exec_properties">exec_properties</a>, <a href="#spock_test-features">features</a>, <a href="#spock_test-groovy_srcs">groovy_srcs</a>,
            <a href="#spock_test-java_srcs">java_srcs</a>, <a href="#spock_test-jvm_flags">jvm_flags</a>, <a href="#spock_test-package_metadata">package_metadata</a>, <a href="#spock_test-restricted_to">restricted_to</a>, <a href="#spock_test-size">size</a>, <a href="#spock_test-specs">specs</a>, <a href="#spock_test-src_roots">src_roots</a>, <a href="#spock_test-tags">tags</a>,
-           <a href="#spock_test-target_compatible_with">target_compatible_with</a>, <a href="#spock_test-testonly">testonly</a>, <a href="#spock_test-toolchains">toolchains</a>, <a href="#spock_test-visibility">visibility</a>)
+           <a href="#spock_test-target_compatible_with">target_compatible_with</a>, <a href="#spock_test-test_classes">test_classes</a>, <a href="#spock_test-testonly">testonly</a>, <a href="#spock_test-toolchains">toolchains</a>, <a href="#spock_test-visibility">visibility</a>)
 </pre>
 
 Convenience macro for Spock 2.x specifications.
@@ -536,6 +551,7 @@ visibility — callers do not reach into it directly.
 | <a id="spock_test-src_roots"></a>src_roots |  -   | List of strings | optional |  `["src/test/groovy", "src/test/java"]`  |
 | <a id="spock_test-tags"></a>tags |  <a href="https://bazel.build/reference/be/common-definitions#common.tags">Inherited rule attribute</a>   | List of strings; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
 | <a id="spock_test-target_compatible_with"></a>target_compatible_with |  <a href="https://bazel.build/reference/be/common-definitions#common.target_compatible_with">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `None`  |
+| <a id="spock_test-test_classes"></a>test_classes |  Explicit test class FQCNs. When set, bypasses source-path inference for the files in `specs`.   | List of strings | optional |  `[]`  |
 | <a id="spock_test-testonly"></a>testonly |  <a href="https://bazel.build/reference/be/common-definitions#common.testonly">Inherited rule attribute</a>   | Boolean; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  `None`  |
 | <a id="spock_test-toolchains"></a>toolchains |  <a href="https://bazel.build/reference/be/common-definitions#common.toolchains">Inherited rule attribute</a>   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `None`  |
 | <a id="spock_test-visibility"></a>visibility |  The visibility to be passed to this macro's exported targets. It always implicitly includes the location where this macro is instantiated, so this attribute only needs to be explicitly set if you want the macro's targets to be additionally visible somewhere else.   | <a href="https://bazel.build/concepts/labels">List of labels</a>; <a href="https://bazel.build/reference/be/common-definitions#configurable-attributes">nonconfigurable</a> | optional |  |

@@ -4,6 +4,22 @@ This is a fork of [bazelbuild/rules_groovy](https://github.com/bazelbuild/rules_
 
 Changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [semver](https://semver.org/); four-component versions (e.g. `0.1.0.1`) are reserved for the rare case where a patch-set diverges from a registry pin while reusing the upstream tag.
 
+## [Unreleased]
+
+### Fixed
+
+- `groovy_test`, `groovy_junit_test`, `groovy_junit5_test`, and
+  `spock_test` now treat default `src_roots` as package-local in
+  package-local BUILD files. Maven-style test layouts such as
+  `protocol/src/test/groovy/...` work from `protocol/BUILD.bazel`
+  without a workspace-relative `src_roots` override.
+
+### Added
+
+- Test rules now accept `test_classes` as an explicit FQCN override for
+  source files whose runnable class names should not be inferred from
+  their paths.
+
 ## [0.1.0] — 2026-06-01
 
 ### Architecture — pure language ruleset (BREAKING)

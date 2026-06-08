@@ -1,0 +1,16 @@
+load("@rules_groovy//groovy:defs.bzl", "groovy_library", "spock_test")
+
+groovy_library(
+    name = "protocol",
+    srcs = ["src/main/groovy/example/protocol/Position.groovy"],
+)
+
+spock_test(
+    name = "ProtocolSpec",
+    specs = ["src/test/groovy/example/protocol/PositionSpec.groovy"],
+    deps = [
+        ":protocol",
+        "@maven//:org_junit_platform_junit_platform_console",
+        "@maven//:org_spockframework_spock_core",
+    ],
+)

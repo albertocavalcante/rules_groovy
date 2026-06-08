@@ -44,10 +44,34 @@ load("//groovy/private:library.bzl", "groovy_library")
 # workspace root.
 # ---------------------------------------------------------------------------
 
-# Default source roots: Maven-style layout at the workspace root.
+# Default source roots: Maven-style layout. In a root BUILD file these are
+# workspace-relative. In a package-local BUILD file, the rule normalizes them
+# against `ctx.label.package` so `src/test/groovy` means
+# `<package>/src/test/groovy`.
 _DEFAULT_SRC_ROOTS = ["src/test/groovy", "src/test/java"]
 
-def path_to_class(path, src_roots = _DEFAULT_SRC_ROOTS):
+def _normalized_src_roots(src_roots, package_name = ""):
+    """Return source roots in the order path matching should try.
+
+    Bazel `File.path` values are workspace-relative and use `/` separators on
+    every platform, including Windows. This helper deliberately works in that
+    Bazel path space rather than using host filesystem separators.
+    """
+    roots = []
+    for root in src_roots:
+        normalized = root.strip("/")
+        if not normalized:
+            continue
+
+        if package_name:
+            package_root = package_name + "/" + normalized
+            if not normalized.startswith(package_name + "/"):
+                roots.append(package_root)
+        roots.append(normalized)
+
+    return roots
+
+def path_to_class(path, src_roots = _DEFAULT_SRC_ROOTS, package_name = ""):
     """Convert a test source path to a Java/Groovy fully-qualified class name.
 
     Strips the longest matching prefix in `src_roots`, then drops the
@@ -61,9 +85,14 @@ def path_to_class(path, src_roots = _DEFAULT_SRC_ROOTS):
                                                               is legal — groovyc
                                                               accepts mixed sources)
 
-    Custom roots — e.g. `src_roots = ["example/foo/src/test/groovy"]` —
-    work the same way; the longest matching root wins so nested layouts
-    behave sensibly.
+    In package-local BUILD files, roots are also tried relative to
+    `package_name`. For example, with `package_name = "example/foo"`, the
+    default `src_roots` match
+    `example/foo/src/test/groovy/<pkg>/<Cls>.groovy`.
+
+    Custom workspace-relative roots — e.g.
+    `src_roots = ["example/foo/src/test/groovy"]` — continue to work the same
+    way. The longest matching root wins so nested layouts behave sensibly.
 
     Fails loudly when no root matches, or when the source's extension is
     not `.groovy` / `.java`.
@@ -72,12 +101,14 @@ def path_to_class(path, src_roots = _DEFAULT_SRC_ROOTS):
       path: Workspace-relative path to a test source file.
       src_roots: Source-root prefixes to try, longest first. Defaults to
         `["src/test/groovy", "src/test/java"]`.
+      package_name: Bazel package name for package-local root normalization.
 
     Returns:
       The fully-qualified Java/Groovy class name as a string (e.g.
       `"com.example.MyTest"`).
     """
-    sorted_roots = sorted(src_roots, key = lambda r: -len(r))
+    normalized_roots = _normalized_src_roots(src_roots, package_name)
+    sorted_roots = sorted(normalized_roots, key = lambda r: -len(r))
     for root in sorted_roots:
         prefix = root.rstrip("/") + "/"
         if path.startswith(prefix):
@@ -86,7 +117,13 @@ def path_to_class(path, src_roots = _DEFAULT_SRC_ROOTS):
                 if stripped.endswith(ext):
                     return stripped[:-len(ext)].replace("/", ".")
             fail("groovy_test source {} has an unsupported extension (expected .groovy or .java)".format(path))
-    fail("groovy_test source {} does not live under any of src_roots = {}".format(path, src_roots))
+    fail(
+        "groovy_test source {} does not live under any of src_roots = {} (normalized roots = {}). Set test_classes for unusual layouts.".format(
+            path,
+            src_roots,
+            normalized_roots,
+        ),
+    )
 
 # ---------------------------------------------------------------------------
 # _groovy_test — internal test rule. Toolchain-resolved launcher writer +
@@ -98,7 +135,16 @@ def path_to_class(path, src_roots = _DEFAULT_SRC_ROOTS):
 def _groovy_test_impl(ctx):
     # Resolve the runtime classpath off the SDK + caller-supplied deps.
     classpath = test_runtime_classpath(ctx, ctx.attr.deps)
-    classes = [path_to_class(src.path, ctx.attr.src_roots) for src in ctx.files.srcs]
+    classes = ctx.attr.test_classes
+    if not classes:
+        classes = [
+            path_to_class(
+                src.path,
+                ctx.attr.src_roots,
+                package_name = ctx.label.package,
+            )
+            for src in ctx.files.srcs
+        ]
 
     if not ctx.attr.runner_class:
         fail(("groovy_test {} is missing `runner_class`. Set it explicitly " +
@@ -145,6 +191,10 @@ _groovy_test = rule(
                   "`org.junit.platform.console.ConsoleLauncher` for " +
                   "`groovy_junit5_test` and `spock_test`).",
         ),
+        "test_classes": attr.string_list(
+            doc = "Explicit test class FQCNs. When set, bypasses `srcs` to " +
+                  "`src_roots` class-name inference.",
+        ),
         "src_roots": attr.string_list(
             default = _DEFAULT_SRC_ROOTS,
             doc = "Source-root prefixes to strip from test source paths when " +
@@ -177,6 +227,7 @@ def _groovy_test_macro_impl(
         tags,
         src_roots,
         runner_class,
+        test_classes,
         **kwargs):
     # Resources: v0.1 keeps the legacy side `java_library(resources = ...)`
     # target. When `resources` is empty no `java_library` target is created.
@@ -200,6 +251,7 @@ def _groovy_test_macro_impl(
         jvm_flags = jvm_flags,
         src_roots = src_roots,
         runner_class = runner_class,
+        test_classes = test_classes,
         **kwargs
     )
 
@@ -248,6 +300,10 @@ groovy_test = macro(
                   "you wired in `deps` (e.g. `\"" + JUNIT5_CONSOLE_LAUNCHER +
                   "\"`).",
         ),
+        "test_classes": attr.string_list(
+            doc = "Explicit test class FQCNs. When set, bypasses source-path " +
+                  "inference from `srcs` / `src_roots`.",
+        ),
     },
     doc = """Runs Groovy tests under an explicit JVM main class.
 
@@ -259,13 +315,18 @@ the `.groovy` / `.java` extension. Each derived class is passed to the
 `org.junit.platform.console.ConsoleLauncher`).
 
 The default `src_roots` matches Maven-style layouts at the workspace
-root (`src/test/groovy`, `src/test/java`). Override it to host tests
-under arbitrary directory trees — e.g. `["example/foo/src/test/groovy"]`
-— without rewriting the call sites.
+root (`src/test/groovy`, `src/test/java`) and package-local Maven-style
+layouts when the test target lives below a package directory. Override it to
+host tests under arbitrary directory trees — e.g. `["src/integration/groovy"]`
+from a package-local BUILD file or `["example/foo/src/test/groovy"]` from the
+workspace root — without rewriting the call sites.
 
 JUnit / Spock jars come in via `deps` — they are user concerns,
 typically resolved by `rules_jvm_external`'s `maven.install`. See
 `examples/junit5_external/` for the canonical wiring.
+
+Set `test_classes` when the class names should be selected explicitly instead
+of inferred from source paths.
 
 For convenience wrappers that hardcode the runner and split test
 sources into a side library, see `groovy_junit_test`,
@@ -292,6 +353,7 @@ def _groovy_junit_test_impl(
         size,
         tags,
         src_roots,
+        test_classes,
         **kwargs):
     if len(tests) == 0:
         fail("Must provide at least one file in tests")
@@ -317,6 +379,7 @@ def _groovy_junit_test_impl(
         tags = tags,
         src_roots = src_roots,
         runner_class = JUNIT4_CORE,
+        test_classes = test_classes,
         **kwargs
     )
 
@@ -349,6 +412,10 @@ groovy_junit_test = macro(
         "jvm_flags": attr.string_list(),
         "size": attr.string(default = "small", configurable = False),
         "src_roots": attr.string_list(default = _DEFAULT_SRC_ROOTS),
+        "test_classes": attr.string_list(
+            doc = "Explicit test class FQCNs. When set, bypasses source-path " +
+                  "inference for the files in `tests`.",
+        ),
     },
     doc = """Convenience macro for JUnit-4-driven Groovy tests with helper sources.
 
@@ -381,6 +448,7 @@ def _groovy_junit5_test_impl(
         size,
         tags,
         src_roots,
+        test_classes,
         **kwargs):
     if len(tests) == 0:
         fail("Must provide at least one file in tests")
@@ -406,6 +474,7 @@ def _groovy_junit5_test_impl(
         tags = tags,
         src_roots = src_roots,
         runner_class = JUNIT5_CONSOLE_LAUNCHER,
+        test_classes = test_classes,
         **kwargs
     )
 
@@ -437,6 +506,10 @@ groovy_junit5_test = macro(
         "jvm_flags": attr.string_list(),
         "size": attr.string(default = "small", configurable = False),
         "src_roots": attr.string_list(default = _DEFAULT_SRC_ROOTS),
+        "test_classes": attr.string_list(
+            doc = "Explicit test class FQCNs. When set, bypasses source-path " +
+                  "inference for the files in `tests`.",
+        ),
     },
     doc = """Convenience macro for JUnit 5 (Jupiter)-driven Groovy tests.
 
@@ -471,6 +544,7 @@ def _spock_test_impl(
         size,
         tags,
         src_roots,
+        test_classes,
         **kwargs):
     if len(specs) == 0:
         fail("Must provide at least one file in specs")
@@ -496,6 +570,7 @@ def _spock_test_impl(
         tags = tags,
         src_roots = src_roots,
         runner_class = JUNIT5_CONSOLE_LAUNCHER,
+        test_classes = test_classes,
         **kwargs
     )
 
@@ -527,6 +602,10 @@ spock_test = macro(
         "jvm_flags": attr.string_list(),
         "size": attr.string(default = "small", configurable = False),
         "src_roots": attr.string_list(default = _DEFAULT_SRC_ROOTS),
+        "test_classes": attr.string_list(
+            doc = "Explicit test class FQCNs. When set, bypasses source-path " +
+                  "inference for the files in `specs`.",
+        ),
     },
     doc = """Convenience macro for Spock 2.x specifications.
 

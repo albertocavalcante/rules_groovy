@@ -13,3 +13,8 @@ bazel test //...
 What this proves: the Spock 2.x + JUnit 5 Platform composition runs end
 to end. Data-driven specs (`where:` blocks, the `expect:` matrix) report
 through the JUnit Platform.
+
+The `//protocol:ProtocolSpec` target mirrors a downstream multi-module layout:
+its BUILD file lives under `protocol/`, and the spec lives under
+`protocol/src/test/groovy/...`. The default `src_roots` work there without a
+workspace-relative override.

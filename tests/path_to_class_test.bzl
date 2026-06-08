@@ -85,6 +85,61 @@ def _custom_root_test_impl(ctx):
 custom_root_test = unittest.make(_custom_root_test_impl)
 
 # ---------------------------------------------------------------------------
+# Package-local roots — Maven layout under a Bazel package directory.
+# ---------------------------------------------------------------------------
+
+def _subpackage_default_roots_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    asserts.equals(
+        env,
+        "io.lsp4g.protocol.PositionRangeSpec",
+        path_to_class(
+            "lsp4g-protocol/src/test/groovy/io/lsp4g/protocol/PositionRangeSpec.groovy",
+            _DEFAULT_ROOTS,
+            package_name = "lsp4g-protocol",
+        ),
+    )
+
+    return unittest.end(env)
+
+subpackage_default_roots_test = unittest.make(_subpackage_default_roots_test_impl)
+
+def _subpackage_explicit_workspace_root_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    asserts.equals(
+        env,
+        "io.lsp4g.protocol.PositionRangeSpec",
+        path_to_class(
+            "lsp4g-protocol/src/test/groovy/io/lsp4g/protocol/PositionRangeSpec.groovy",
+            ["lsp4g-protocol/src/test/groovy"],
+            package_name = "lsp4g-protocol",
+        ),
+    )
+
+    return unittest.end(env)
+
+subpackage_explicit_workspace_root_test = unittest.make(_subpackage_explicit_workspace_root_test_impl)
+
+def _subpackage_custom_package_relative_root_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    asserts.equals(
+        env,
+        "io.lsp4g.protocol.PositionRangeSpec",
+        path_to_class(
+            "lsp4g-protocol/src/integration/groovy/io/lsp4g/protocol/PositionRangeSpec.groovy",
+            ["src/integration/groovy"],
+            package_name = "lsp4g-protocol",
+        ),
+    )
+
+    return unittest.end(env)
+
+subpackage_custom_package_relative_root_test = unittest.make(_subpackage_custom_package_relative_root_test_impl)
+
+# ---------------------------------------------------------------------------
 # Overlapping roots — longest-prefix match wins.
 # ---------------------------------------------------------------------------
 
@@ -144,5 +199,28 @@ def _no_match_failure_test_impl(ctx):
 
 no_match_failure_test = analysistest.make(
     _no_match_failure_test_impl,
+    expect_failure = True,
+)
+
+def _subpackage_no_match_rule_impl(ctx):  # buildifier: disable=unused-variable
+    path_to_class(
+        "other/src/test/groovy/T.groovy",
+        _DEFAULT_ROOTS,
+        package_name = "lsp4g-protocol",
+    )
+    return [DefaultInfo()]
+
+subpackage_no_match_rule = rule(implementation = _subpackage_no_match_rule_impl)
+
+def _subpackage_no_match_failure_test_impl(ctx):
+    env = analysistest.begin(ctx)
+
+    asserts.expect_failure(env, "other/src/test/groovy/T.groovy")
+    asserts.expect_failure(env, "lsp4g-protocol/src/test/groovy")
+
+    return analysistest.end(env)
+
+subpackage_no_match_failure_test = analysistest.make(
+    _subpackage_no_match_failure_test_impl,
     expect_failure = True,
 )
