@@ -56,10 +56,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup Bazelisk
-        uses: bazelbuild/setup-bazelisk@v3
+        uses: bazelbuild/setup-bazelisk@b39c379c82683a5f25d34f0d062761f62693e0b2 # v3.0.0
 
       # ISSUE-078: cache the Bazel disk cache keyed on MODULE.bazel.lock.
       # MODULE.bazel.lock rarely changes between PRs; cache hits trim
@@ -68,7 +68,7 @@ jobs:
       # bazel-disk-linux-* cache when the exact lock hash misses, letting
       # Bazel re-resolve only what's actually outdated.
       - name: Cache Bazel disk cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/bazel-disk
           key: bazel-disk-linux-${{ hashFiles('MODULE.bazel.lock') }}
@@ -111,10 +111,10 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup Bazelisk
-        uses: bazelbuild/setup-bazelisk@v3
+        uses: bazelbuild/setup-bazelisk@b39c379c82683a5f25d34f0d062761f62693e0b2 # v3.0.0
 
       # No actions/cache disk-cache on macOS: the weekly cadence makes
       # the hit rate too low to be worth a separate cache key. The
@@ -161,10 +161,10 @@ jobs:
           - { os: macos-latest,  bazel-version: '7.x' }
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup Bazelisk
-        uses: bazelbuild/setup-bazelisk@v3
+        uses: bazelbuild/setup-bazelisk@b39c379c82683a5f25d34f0d062761f62693e0b2 # v3.0.0
 
       # Bazel 7.x / 8.x may or may not honor the prebuilt-protoc flag
       # defined in the default `build` rc line; advisory cells may
@@ -228,13 +228,13 @@ jobs:
           - junit5_external
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup Bazelisk
-        uses: bazelbuild/setup-bazelisk@v3
+        uses: bazelbuild/setup-bazelisk@b39c379c82683a5f25d34f0d062761f62693e0b2 # v3.0.0
 
       - name: Cache Bazel disk cache (per example)
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/bazel-disk
           key: bazel-disk-examples-${{ matrix.example }}-${{ hashFiles(format('examples/{0}/MODULE.bazel', matrix.example)) }}
@@ -357,7 +357,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install Buildifier (pinned v8.5.1)
         env:
@@ -398,15 +398,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup Bazelisk
-        uses: bazelbuild/setup-bazelisk@v3
+        uses: bazelbuild/setup-bazelisk@b39c379c82683a5f25d34f0d062761f62693e0b2 # v3.0.0
         env:
           USE_BAZEL_VERSION: '9.x'
 
       - name: Cache Bazel disk cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/bazel-disk
           key: bazel-disk-docs-${{ hashFiles('MODULE.bazel.lock') }}
